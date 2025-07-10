@@ -61,37 +61,36 @@ def calculate_trends(current_metrics, historical_metrics):
 def generate_html_report(metrics):
     """Generate HTML report from metrics"""
     
-    html_template = """
-<!DOCTYPE html>
+    html_template = """<!DOCTYPE html>
 <html>
 <head>
     <title>Security Tools Performance Report</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }
-        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        table { border-collapse: collapse; width: 100%; margin: 20px 0; }
-        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-        th { background-color: #f2f2f2; font-weight: bold; }
-        .metric-card { background: #f9f9f9; padding: 15px; margin: 10px 0; border-radius: 5px; border-left: 4px solid #007cba; }
-        .summary { background: #e8f4fd; padding: 20px; border-radius: 5px; margin: 20px 0; }
-        .warning { background: #fff3cd; border: 1px solid #ffeaa7; padding: 10px; border-radius: 5px; color: #856404; }
-        .success { background: #d4edda; border: 1px solid #c3e6cb; padding: 10px; border-radius: 5px; color: #155724; }
-        .error { background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; border-radius: 5px; color: #721c24; }
-        .trend-up { color: #dc3545; font-weight: bold; }
-        .trend-down { color: #28a745; font-weight: bold; }
-        .trend-stable { color: #6c757d; }
-        .nav-tabs { list-style: none; padding: 0; margin: 20px 0; border-bottom: 2px solid #dee2e6; }
-        .nav-tabs li { display: inline-block; margin-right: 10px; }
-        .nav-tabs a { display: block; padding: 10px 20px; text-decoration: none; color: #495057; border: 1px solid transparent; border-radius: 5px 5px 0 0; }
-        .nav-tabs a.active { background: #007cba; color: white; border-color: #007cba; }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        .regression-alert { background: #f8d7da; border: 1px solid #f5c6cb; padding: 15px; border-radius: 5px; margin: 10px 0; }
-        .improvement-alert { background: #d1ecf1; border: 1px solid #bee5eb; padding: 15px; border-radius: 5px; margin: 10px 0; }
-        .chart-container { background: white; padding: 20px; border-radius: 5px; margin: 20px 0; border: 1px solid #dee2e6; }
+        body {{ font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }}
+        .container {{ max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+        table {{ border-collapse: collapse; width: 100%; margin: 20px 0; }}
+        th, td {{ border: 1px solid #ddd; padding: 12px; text-align: left; }}
+        th {{ background-color: #f2f2f2; font-weight: bold; }}
+        .metric-card {{ background: #f9f9f9; padding: 15px; margin: 10px 0; border-radius: 5px; border-left: 4px solid #007cba; }}
+        .summary {{ background: #e8f4fd; padding: 20px; border-radius: 5px; margin: 20px 0; }}
+        .warning {{ background: #fff3cd; border: 1px solid #ffeaa7; padding: 10px; border-radius: 5px; color: #856404; }}
+        .success {{ background: #d4edda; border: 1px solid #c3e6cb; padding: 10px; border-radius: 5px; color: #155724; }}
+        .error {{ background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; border-radius: 5px; color: #721c24; }}
+        .trend-up {{ color: #dc3545; font-weight: bold; }}
+        .trend-down {{ color: #28a745; font-weight: bold; }}
+        .trend-stable {{ color: #6c757d; }}
+        .nav-tabs {{ list-style: none; padding: 0; margin: 20px 0; border-bottom: 2px solid #dee2e6; }}
+        .nav-tabs li {{ display: inline-block; margin-right: 10px; }}
+        .nav-tabs a {{ display: block; padding: 10px 20px; text-decoration: none; color: #495057; border: 1px solid transparent; border-radius: 5px 5px 0 0; }}
+        .nav-tabs a.active {{ background: #007cba; color: white; border-color: #007cba; }}
+        .tab-content {{ display: none; }}
+        .tab-content.active {{ display: block; }}
+        .regression-alert {{ background: #f8d7da; border: 1px solid #f5c6cb; padding: 15px; border-radius: 5px; margin: 10px 0; }}
+        .improvement-alert {{ background: #d1ecf1; border: 1px solid #bee5eb; padding: 15px; border-radius: 5px; margin: 10px 0; }}
+        .chart-container {{ background: white; padding: 20px; border-radius: 5px; margin: 20px 0; border: 1px solid #dee2e6; }}
     </style>
     <script>
-        function showTab(tabName) {
+        function showTab(tabName) {{
             // Hide all tab contents
             var contents = document.getElementsByClassName('tab-content');
             for (var i = 0; i < contents.length; i++) {
@@ -117,112 +116,113 @@ def generate_html_report(metrics):
         <div class="summary">
             <h2>📊 Executive Summary</h2>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
-                <div>
-                    <h3>{total_tools}</h3>
-                    <p>Tools Analyzed</p>
-                </div>
-                <div>
-                    <h3>{total_duration}s</h3>
-                    <p>Total Analysis Time</p>
-                </div>
-                <div>
-                    <h3>{avg_ratio}</h3>
-                    <p>Avg Performance Ratio (s/LOC)</p>
-                </div>
-                <div>
-                    <h3>{timestamp}</h3>
-                    <p>Generated</p>
-                </div>
+                <div><h3>{total_tools}</h3><p>Tools Analyzed</p></div>
+                <div><h3>{total_duration}s</h3><p>Total Analysis Time</p></div>
+                <div><h3>{avg_ratio}</h3><p>Avg Performance Ratio</p></div>
+                <div><h3>{timestamp}</h3><p>Generated</p></div>
             </div>
         </div>
 
         {alerts_section}
 
-        <ul class="nav-tabs">
-            <li><a href="#" class="nav-link active" onclick="showTab('overview')">Overview</a></li>
-            <li><a href="#" class="nav-link" onclick="showTab('trends')">Trends & Regressions</a></li>
-            <li><a href="#" class="nav-link" onclick="showTab('detailed')">Detailed Metrics</a></li>
-            <li><a href="#" class="nav-link" onclick="showTab('recommendations')">Recommendations</a></li>
-        </ul>
-
         <div id="overview" class="tab-content active">
             <h2>🎯 Performance Overview</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Tool</th>
-                        <th>Duration (s)</th>
-                        <th>Lines of Code</th>
-                        <th>Files Analyzed</th>
-                        <th>Performance Ratio (s/LOC)</th>
-                        <th>Status</th>
-                        <th>Trend</th>
-                    </tr>
-                </thead>
-                <tbody>
-{table_rows}
-                </tbody>
-            </table>
-        </div>
-
-        <div id="trends" class="tab-content">
-            <h2>📈 Performance Trends & Regression Analysis</h2>
-            {trends_section}
-        </div>
-
-        <div id="detailed" class="tab-content">
-            <h2>🔍 Detailed Metrics</h2>
-            {detailed_metrics}
-        </div>
-
-        <div id="recommendations" class="tab-content">
-            <h2>💡 Performance Recommendations</h2>
-            {recommendations_section}
+            {table_content}
         </div>
 
         <div class="chart-container">
             <h3>📋 Performance Benchmarks</h3>
-            <table style="width: auto;">
-                <tr><td><strong>🚀 Fast:</strong></td><td>&lt; 0.001 sec/LOC</td><td style="background: #d4edda;">Excellent performance</td></tr>
-                <tr><td><strong>⚡ Normal:</strong></td><td>0.001 - 0.01 sec/LOC</td><td style="background: #fff3cd;">Acceptable performance</td></tr>
-                <tr><td><strong>🐌 Slow:</strong></td><td>&gt; 0.01 sec/LOC</td><td style="background: #f8d7da;">Needs optimization</td></tr>
-            </table>
+            <p><strong>🚀 Fast:</strong> &lt; 0.001 sec/LOC | <strong>⚡ Normal:</strong> 0.001-0.01 sec/LOC | <strong>🐌 Slow:</strong> &gt; 0.01 sec/LOC</p>
         </div>
 
-        <div style="margin-top: 30px; padding: 15px; background: #f8f9fa; border-radius: 5px; border-left: 4px solid #007cba;">
-            <h4>📍 Where to Find Results:</h4>
+        <div style="margin-top: 30px; padding: 15px; background: #f8f9fa; border-radius: 5px;">
+            <h4>📍 Access Instructions:</h4>
             <ul>
-                <li><strong>GitHub Actions Artifacts:</strong> Download 'performance-metrics-report' artifact from workflow run</li>
-                <li><strong>Security Tab:</strong> SARIF results from CodeQL, Semgrep appear in repository Security tab</li>
-                <li><strong>Workflow Logs:</strong> Real-time metrics printed in action logs</li>
-                <li><strong>Pull Request Checks:</strong> Performance regression warnings in PR status checks</li>
+                <li><strong>GitHub Actions Artifacts:</strong> Download 'performance-metrics-report' from workflow run</li>
+                <li><strong>Security Tab:</strong> SARIF results appear in repository Security tab</li>
+                <li><strong>Workflow Logs:</strong> Real-time metrics in action logs</li>
             </ul>
         </div>
     </div>
 </body>
-</html>
-"""
+</html>"""
 
-    # Load historical data for trends
-    historical_metrics = load_historical_metrics()
-    trends = calculate_trends(metrics, historical_metrics)
+    # Process metrics or show empty state
+    if not metrics:
+        return html_template.format(
+            total_tools=0,
+            total_duration=0,
+            avg_ratio="N/A",
+            timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC'),
+            alerts_section='<div class="warning"><p>⚠️ No metrics collected yet. Run the workflow to see performance data.</p></div>',
+            table_content='<p>No performance data available. Metrics will appear after running security analysis tools.</p>'
+        )
 
     # Calculate summary statistics
     total_tools = len(set(m['tool'] for m in metrics))
     total_duration = sum(m['duration_seconds'] for m in metrics)
-    avg_ratio = sum(float(m.get('performance_ratio', 0)) for m in metrics) / len(metrics) if metrics else 0
+    avg_ratio = sum(float(m.get('performance_ratio', 0)) for m in metrics) / len(metrics)
 
-    # Generate alerts section
-    alerts_section = ""
-    regressions = [tool for tool, trend in trends.items() if trend['duration_change'] > 25]
-    improvements = [tool for tool, trend in trends.items() if trend['duration_change'] < -20]
+    # Generate table content
+    table_content = '<table><thead><tr><th>Tool</th><th>Duration (s)</th><th>Lines of Code</th><th>Status</th></tr></thead><tbody>'
     
-    if regressions:
-        alerts_section += '<div class="regression-alert"><h3>🚨 Performance Regressions Detected</h3><ul>'
-        for tool in regressions:
-            change = trends[tool]['duration_change']
-            alerts_section += f'<li><strong>{tool}:</strong> {change:.1f}% slower than baseline</li>'
-        alerts_section += '</ul></div>'
+    for metric in metrics:
+        ratio = float(metric.get('performance_ratio', 0))
+        status = '🚀 Fast' if ratio < 0.001 else '⚡ Normal' if ratio < 0.01 else '🐌 Slow'
+        loc_total = metric.get('lines_of_code', {}).get('total', 0) if isinstance(metric.get('lines_of_code'), dict) else metric.get('lines_of_code', 0)
+        
+        table_content += f'<tr><td>{metric["tool"]}</td><td>{metric["duration_seconds"]}</td><td>{loc_total:,}</td><td>{status}</td></tr>'
+    
+    table_content += '</tbody></table>'
+
+    return html_template.format(
+        total_tools=total_tools,
+        total_duration=total_duration,
+        avg_ratio=f"{avg_ratio:.6f}",
+        timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC'),
+        alerts_section="",
+        table_content=table_content
+    )
+
+def main():
+    """Main function"""
+    print("🔄 Generating performance report...")
+    
+    # Debug: Show what files exist
+    print("📁 Checking for metrics files...")
+    current_files = os.listdir('.')
+    print(f"Current directory files: {[f for f in current_files if 'metrics' in f or f.endswith('.jsonl')]}")
+    
+    if os.path.exists('metrics'):
+        metrics_files = os.listdir('metrics')
+        print(f"Metrics directory files: {metrics_files}")
+    
+    metrics = load_metrics()
+    
+    if not metrics:
+        print("⚠️  No metrics found. Creating empty report.")
+    else:
+        print(f"✅ Found {len(metrics)} metric entries")
+    
+    try:
+        html_report = generate_html_report(metrics)
+        
+        # Write HTML report
+        with open('performance-report.html', 'w') as f:
+            f.write(html_report)
+        
+        # Create metrics directory
+        os.makedirs('metrics', exist_ok=True)
+        
+        print(f"✅ Performance report generated: performance-report.html")
+        print(f"📊 Total metrics collected: {len(metrics)}")
+        
+    except Exception as e:
+        print(f"❌ Error generating report: {e}")
+        # Create a minimal report anyway
+        with open('performance-report.html', 'w') as f:
+            f.write(f"<html><body><h1>Error generating report</h1><p>{e}</p></body></html>")
+        raise
     
     if improvements:
         alerts_section += '<div class="improvement-alert"><h3>🚀 Performance Improvements</h3><ul>'

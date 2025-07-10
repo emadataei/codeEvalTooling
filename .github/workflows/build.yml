@@ -30,6 +30,15 @@ jobs:
           chmod +x ./scripts/collect-metrics.sh
           ./scripts/collect-metrics.sh "SonarQube" $SONAR_START_TIME
         if: always()
+      
+      - name: Upload SonarQube metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: sonarqube-metrics
+          path: |
+            performance-metrics.jsonl
+            metrics/
+        if: always()
 
   codeql:
     name: CodeQL Analysis
@@ -70,6 +79,15 @@ jobs:
           chmod +x ./scripts/collect-metrics.sh
           ./scripts/collect-metrics.sh "CodeQL-${{ matrix.language }}" $CODEQL_START_TIME
         if: always()
+      
+      - name: Upload CodeQL metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: codeql-metrics-${{ matrix.language }}
+          path: |
+            performance-metrics.jsonl
+            metrics/
+        if: always()
 
   semgrep:
     name: Semgrep Analysis
@@ -97,6 +115,15 @@ jobs:
         run: |
           chmod +x ./scripts/collect-metrics.sh
           ./scripts/collect-metrics.sh "Semgrep" $SEMGREP_START_TIME
+        if: always()
+      
+      - name: Upload Semgrep metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-metrics
+          path: |
+            performance-metrics.jsonl
+            metrics/
         if: always()
 
   snyk:
@@ -155,6 +182,15 @@ jobs:
           ./scripts/collect-metrics.sh "Snyk" $SNYK_START_TIME
         if: always()
       
+      - name: Upload Snyk metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: snyk-metrics
+          path: |
+            performance-metrics.jsonl
+            metrics/
+        if: always()
+      
       - name: Upload Snyk results
         uses: actions/upload-artifact@v4
         with:
@@ -170,12 +206,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Download all metrics
-        run: mkdir -p metrics
+      - name: Download all metrics artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: "*-metrics*"
+          merge-multiple: true
+      
+      - name: Debug - List downloaded files
+        run: |
+          echo "=== Current directory contents ==="
+          ls -la
+          echo "=== Metrics directory contents ==="
+          ls -la metrics/ || echo "No metrics directory"
+          echo "=== Performance metrics file ==="
+          cat performance-metrics.jsonl || echo "No performance-metrics.jsonl file"
       
       - name: Generate performance report
         run: |
-          chmod +x ./scripts/generate-performance-report.py
           python scripts/generate-performance-report.py
       
       - name: Upload performance report
