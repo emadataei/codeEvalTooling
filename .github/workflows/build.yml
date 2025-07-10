@@ -26,7 +26,9 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       
       - name: Collect SonarQube metrics
-        run: ./scripts/collect-metrics.sh "SonarQube" $SONAR_START_TIME
+        run: |
+          chmod +x ./scripts/collect-metrics.sh
+          ./scripts/collect-metrics.sh "SonarQube" $SONAR_START_TIME
         if: always()
 
   codeql:
@@ -64,7 +66,9 @@ jobs:
           category: "/language:${{ matrix.language }}"
       
       - name: Collect CodeQL metrics
-        run: ./scripts/collect-metrics.sh "CodeQL-${{ matrix.language }}" $CODEQL_START_TIME
+        run: |
+          chmod +x ./scripts/collect-metrics.sh
+          ./scripts/collect-metrics.sh "CodeQL-${{ matrix.language }}" $CODEQL_START_TIME
         if: always()
 
   semgrep:
@@ -90,7 +94,9 @@ jobs:
             p/typescript
       
       - name: Collect Semgrep metrics
-        run: ./scripts/collect-metrics.sh "Semgrep" $SEMGREP_START_TIME
+        run: |
+          chmod +x ./scripts/collect-metrics.sh
+          ./scripts/collect-metrics.sh "Semgrep" $SEMGREP_START_TIME
         if: always()
 
   snyk:
@@ -144,7 +150,9 @@ jobs:
         continue-on-error: true
       
       - name: Collect Snyk metrics
-        run: ./scripts/collect-metrics.sh "Snyk" $SNYK_START_TIME
+        run: |
+          chmod +x ./scripts/collect-metrics.sh
+          ./scripts/collect-metrics.sh "Snyk" $SNYK_START_TIME
         if: always()
       
       - name: Upload Snyk results
@@ -167,6 +175,7 @@ jobs:
       
       - name: Generate performance report
         run: |
+          chmod +x ./scripts/generate-performance-report.py
           python scripts/generate-performance-report.py
       
       - name: Upload performance report
@@ -180,6 +189,7 @@ jobs:
       
       - name: Check for performance regression
         run: |
+          chmod +x ./scripts/check-performance-regression.py
           python scripts/check-performance-regression.py \
             --current-metrics performance-metrics.jsonl \
             --threshold 25
