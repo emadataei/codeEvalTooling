@@ -79,10 +79,13 @@ jobs:
         with:
           python-version: '3.10'
       
-      - name: Install Python dependencies
+      - name: Install uv (faster Python package manager)
+        run: pip install uv
+      
+      - name: Install Python dependencies with uv
         run: |
           cd backend
-          pip install -e .
+          uv sync --frozen
       
       - name: Run Snyk to check Python dependencies
         uses: snyk/actions/python@master
