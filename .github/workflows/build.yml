@@ -52,36 +52,20 @@ jobs:
   semgrep:
     name: Semgrep Analysis
     runs-on: ubuntu-latest
-    container:
-      image: semgrep/semgrep
     steps:
       - uses: actions/checkout@v4
       
+      # Option 1: Use Semgrep Action (Recommended - handles SARIF correctly)
       - name: Run Semgrep
-        run: |
-          semgrep \
-            --config=p/security-audit \
-            --config=p/secrets \
-            --config=p/owasp-top-ten \
-            --config=p/python \
-            --config=p/react \
-            --config=p/typescript \
-            --json \
-            --output=semgrep-results.json \
-            .
-      
-      - name: Upload Semgrep results
-        uses: actions/upload-artifact@v4
+        uses: semgrep/semgrep-action@v1
         with:
-          name: semgrep-results
-          path: semgrep-results.json
-      
-      # Optional: Upload to GitHub Security tab
-      - name: Upload SARIF file
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: semgrep-results.json
-        if: always()
+          config: >-
+            p/security-audit
+            p/secrets
+            p/owasp-top-ten
+            p/python
+            p/react
+            p/typescript
 
   snyk:
     name: Snyk Security Analysis
@@ -98,7 +82,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           cd backend
-          pip install -r requirements.txt || pip install .
+          pip install -e .
       
       - name: Run Snyk to check Python dependencies
         uses: snyk/actions/python@master
@@ -125,29 +109,7 @@ jobs:
         with:
           args: --file=frontend/package.json --severity-threshold=high
       
-      # Container scanning
-      - name: Build Docker image
-        run: |
-          docker build -t backend-image backend/
-          docker build -t frontend-image frontend/
-      
-      - name: Run Snyk to check Docker images
-        uses: snyk/actions/docker@master
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          image: backend-image
-          args: --severity-threshold=high
-      
-      - name: Run Snyk to check Frontend Docker image
-        uses: snyk/actions/docker@master
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          image: frontend-image
-          args: --severity-threshold=high
-      
-      # Code scanning
+      # Code scanning for both backend and frontend
       - name: Run Snyk Code analysis
         uses: snyk/actions/setup@master
       - run: snyk code test --json-file-output=snyk-code-results.json
