@@ -13,10 +13,16 @@ def load_current_metrics(filepath):
     """Load current run metrics"""
     metrics = []
     if os.path.exists(filepath):
-        with open(filepath, 'r') as f:
-            for line in f:
-                if line.strip():
-                    metrics.append(json.loads(line))
+        with open(filepath, 'r', encoding='utf-8') as f:
+            for line_num, line in enumerate(f, 1):
+                line = line.strip()
+                if line:
+                    try:
+                        metrics.append(json.loads(line))
+                    except json.JSONDecodeError as e:
+                        print(f"⚠️  Warning: Skipping malformed JSON on line {line_num}: {e}")
+                        print(f"   Line content: {line[:100]}...")
+                        continue
     return metrics
 
 def load_historical_metrics():
@@ -29,10 +35,15 @@ def load_historical_metrics():
         return []
     
     metrics = []
-    with open(historical_file, 'r') as f:
-        for line in f:
-            if line.strip():
-                metrics.append(json.loads(line))
+    with open(historical_file, 'r', encoding='utf-8') as f:
+        for line_num, line in enumerate(f, 1):
+            line = line.strip()
+            if line:
+                try:
+                    metrics.append(json.loads(line))
+                except json.JSONDecodeError as e:
+                    print(f"⚠️  Warning: Skipping malformed JSON in historical data on line {line_num}: {e}")
+                    continue
     
     return metrics
 
@@ -120,6 +131,18 @@ def main():
     
     print(f"🔍 Checking for performance regressions (threshold: {args.threshold}%)")
     
+    # Debug: Show file contents
+    if os.path.exists(args.current_metrics):
+        print(f"📄 Reading metrics from: {args.current_metrics}")
+        with open(args.current_metrics, 'r', encoding='utf-8') as f:
+            content = f.read()
+            print(f"📊 File size: {len(content)} characters")
+            if content:
+                print(f"📝 First 200 characters: {content[:200]}")
+    else:
+        print(f"❌ Metrics file not found: {args.current_metrics}")
+        return 0
+    
     current_metrics = load_current_metrics(args.current_metrics)
     historical_metrics = load_historical_metrics()
     
@@ -145,7 +168,7 @@ def main():
     
     # Store current metrics as historical for future runs
     os.makedirs('metrics', exist_ok=True)
-    with open('metrics/historical-metrics.jsonl', 'a') as f:
+    with open('metrics/historical-metrics.jsonl', 'a', encoding='utf-8') as f:
         for metric in current_metrics:
             f.write(json.dumps(metric) + '\n')
     
