@@ -262,6 +262,45 @@ jobs:
         run: |
           echo "🔄 Generating performance report..."
           python scripts/generate-performance-report.py
+          python scripts/generate-markdown-report.py
+      
+      - name: Add report to job summary
+        run: |
+          echo "## 🔒 Security Analysis Performance Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f performance-metrics.jsonl ]; then
+            echo "### 📊 Analysis Results" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Tool | Duration | Status |" >> $GITHUB_STEP_SUMMARY
+            echo "|------|----------|--------|" >> $GITHUB_STEP_SUMMARY
+            
+            # Simple parsing without complex Python
+            while IFS= read -r line; do
+              if [ -n "$line" ]; then
+                tool=$(echo "$line" | grep -o '"tool":"[^"]*"' | cut -d'"' -f4)
+                duration=$(echo "$line" | grep -o '"duration_seconds":[0-9]*' | cut -d':' -f2)
+                if [ -n "$tool" ] && [ -n "$duration" ]; then
+                  if [ "$duration" -lt 30 ]; then
+                    status="🚀 Fast"
+                  elif [ "$duration" -lt 60 ]; then
+                    status="⚡ Normal"
+                  else
+                    status="🐌 Slow"
+                  fi
+                  echo "| $tool | ${duration}s | $status |" >> $GITHUB_STEP_SUMMARY
+                fi
+              fi
+            done < performance-metrics.jsonl
+            
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### 📍 Access Options" >> $GITHUB_STEP_SUMMARY
+            echo "- Download 'performance-metrics-report' artifact for full HTML report" >> $GITHUB_STEP_SUMMARY
+            echo "- Check repository Security tab for detailed findings" >> $GITHUB_STEP_SUMMARY
+            echo "- View at: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/reports/${{ github.run_number }}/performance-report.html" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ No performance metrics found. Check individual job logs for issues." >> $GITHUB_STEP_SUMMARY
+          fi
       
       - name: Show generated files
         run: |
@@ -276,6 +315,53 @@ jobs:
             metrics/
             performance-report.html
             performance-metrics.jsonl
+      
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./
+          destination_dir: reports/${{ github.run_number }}
+          keep_files: true
+          publish_branch: gh-pages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Create performance report index
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        run: |
+          mkdir -p gh-pages-temp
+          cat > gh-pages-temp/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Security Analysis Performance Reports</title>
+            <style>
+              body { font-family: Arial, sans-serif; margin: 20px; }
+              .report-link { display: block; padding: 10px; margin: 5px 0; background: #f0f0f0; text-decoration: none; border-radius: 5px; }
+              .report-link:hover { background: #e0e0e0; }
+            </style>
+          </head>
+          <body>
+            <h1>🔒 Security Analysis Performance Reports</h1>
+            <p>Latest reports from automated security analysis:</p>
+            <a href="reports/${{ github.run_number }}/performance-report.html" class="report-link">
+              📊 Latest Report (Run #${{ github.run_number }}) - $(date)
+            </a>
+            <p><em>Historical reports available in the reports/ directory</em></p>
+          </body>
+          </html>
+          EOF
+      
+      - name: Deploy index to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: gh-pages-temp
+          keep_files: true
+          publish_branch: gh-pages
       
       - name: Check for performance regression
         run: |
