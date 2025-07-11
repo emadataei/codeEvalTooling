@@ -13,9 +13,15 @@ def load_metrics():
     metrics = []
     if os.path.exists('performance-metrics.jsonl'):
         with open('performance-metrics.jsonl', 'r') as f:
-            for line in f:
-                if line.strip():
-                    metrics.append(json.loads(line))
+            for line_num, line in enumerate(f, 1):
+                line = line.strip()
+                if line:
+                    try:
+                        metrics.append(json.loads(line))
+                    except json.JSONDecodeError as e:
+                        print(f"⚠️  Warning: Skipping malformed JSON on line {line_num}: {e}")
+                        print(f"   Line content: {line[:100]}...")
+                        continue
     return metrics
 
 def load_historical_metrics():
@@ -164,14 +170,14 @@ def generate_html_report(metrics):
     avg_ratio = sum(float(m.get('performance_ratio', 0)) for m in metrics) / len(metrics)
 
     # Generate table content
-    table_content = '<table><thead><tr><th>Tool</th><th>Duration (s)</th><th>Lines of Code</th><th>Status</th></tr></thead><tbody>'
+    table_content = '<table><thead><tr><th>Tool</th><th>Duration (s)</th><th>Lines of Code</th><th>Performance Ratio</th><th>Status</th></tr></thead><tbody>'
     
     for metric in metrics:
         ratio = float(metric.get('performance_ratio', 0))
         status = '🚀 Fast' if ratio < 0.001 else '⚡ Normal' if ratio < 0.01 else '🐌 Slow'
         loc_total = metric.get('lines_of_code', {}).get('total', 0) if isinstance(metric.get('lines_of_code'), dict) else metric.get('lines_of_code', 0)
         
-        table_content += f'<tr><td>{metric["tool"]}</td><td>{metric["duration_seconds"]}</td><td>{loc_total:,}</td><td>{status}</td></tr>'
+        table_content += f'<tr><td><strong>{metric["tool"]}</strong></td><td>{metric["duration_seconds"]}</td><td>{loc_total:,}</td><td>{ratio:.6f}</td><td>{status}</td></tr>'
     
     table_content += '</tbody></table>'
 
@@ -197,12 +203,22 @@ def main():
         metrics_files = os.listdir('metrics')
         print(f"Metrics directory files: {metrics_files}")
     
+    # Debug: Show content of metrics file if it exists
+    if os.path.exists('performance-metrics.jsonl'):
+        with open('performance-metrics.jsonl', 'r') as f:
+            content = f.read()
+            print(f"📄 Metrics file content preview (first 500 chars):")
+            print(content[:500])
+            print("..." if len(content) > 500 else "")
+    
     metrics = load_metrics()
     
     if not metrics:
         print("⚠️  No metrics found. Creating empty report.")
     else:
         print(f"✅ Found {len(metrics)} metric entries")
+        for i, metric in enumerate(metrics):
+            print(f"  {i+1}. {metric.get('tool', 'Unknown')}: {metric.get('duration_seconds', 0)}s")
     
     try:
         html_report = generate_html_report(metrics)
@@ -214,62 +230,46 @@ def main():
         # Create metrics directory
         os.makedirs('metrics', exist_ok=True)
         
+        # Generate summary JSON
+        summary = {
+            "timestamp": datetime.now().isoformat(),
+            "total_tools": len(set(m['tool'] for m in metrics)) if metrics else 0,
+            "total_duration": sum(m['duration_seconds'] for m in metrics) if metrics else 0,
+            "metrics_count": len(metrics),
+            "tools": list(set(m['tool'] for m in metrics)) if metrics else [],
+            "access_instructions": {
+                "html_report": "performance-report.html",
+                "raw_metrics": "performance-metrics.jsonl",
+                "github_artifacts": "Download 'performance-metrics-report' from Actions tab",
+                "security_results": "Check repository Security tab for SARIF uploads",
+                "regression_alerts": "Check workflow logs for regression warnings"
+            }
+        }
+        
+        with open('metrics/performance-summary.json', 'w') as f:
+            json.dump(summary, f, indent=2)
+        
         print(f"✅ Performance report generated: performance-report.html")
         print(f"📊 Total metrics collected: {len(metrics)}")
+        print(f"🔧 Tools analyzed: {summary['total_tools']}")
+        print("\n📍 Where to access results:")
+        print("  • HTML Report: performance-report.html (download from GitHub Actions artifacts)")
+        print("  • Security Findings: GitHub repo → Security tab → Code scanning alerts")
+        print("  • Raw Metrics: performance-metrics.jsonl")
+        print("  • Workflow Logs: GitHub repo → Actions tab → specific workflow run")
+        print("  • Regression Alerts: Printed in workflow logs with 🚨 prefix")
         
     except Exception as e:
         print(f"❌ Error generating report: {e}")
+        import traceback
+        traceback.print_exc()
         # Create a minimal report anyway
         with open('performance-report.html', 'w') as f:
-            f.write(f"<html><body><h1>Error generating report</h1><p>{e}</p></body></html>")
+            f.write(f"<html><body><h1>Error generating report</h1><p>{e}</p><pre>{traceback.format_exc()}</pre></body></html>")
         raise
-    
-    if improvements:
-        alerts_section += '<div class="improvement-alert"><h3>🚀 Performance Improvements</h3><ul>'
-        for tool in improvements:
-            change = abs(trends[tool]['duration_change'])
-            alerts_section += f'<li><strong>{tool}:</strong> {change:.1f}% faster than baseline</li>'
-        alerts_section += '</ul></div>'
 
-    # Generate table rows with trends
-    table_rows = ""
-    detailed_metrics = ""  # Initialize detailed_metrics
-    
-    for metric in metrics:
-        ratio = float(metric.get('performance_ratio', 0))
-        tool = metric['tool']
-        
-        # Determine status based on performance
-        if ratio < 0.001:
-            status = '<span class="success">🚀 Fast</span>'
-        elif ratio < 0.01:
-            status = '<span>⚡ Normal</span>'
-        else:
-            status = '<span class="warning">🐌 Slow</span>'
-        
-        # Add trend information
-        trend_info = "📊 New"
-        if tool in trends:
-            change = trends[tool]['duration_change']
-            if change > 10:
-                trend_info = f'<span class="trend-up">📈 +{change:.1f}%</span>'
-            elif change < -10:
-                trend_info = f'<span class="trend-down">📉 {change:.1f}%</span>'
-            else:
-                trend_info = f'<span class="trend-stable">➡️ {change:.1f}%</span>'
-        
-        loc_total = metric.get('lines_of_code', {}).get('total', 0) if isinstance(metric.get('lines_of_code'), dict) else metric.get('lines_of_code', 0)
-        files_total = metric.get('files_analyzed', {}).get('total', 0) if isinstance(metric.get('files_analyzed'), dict) else metric.get('files_analyzed', 0)
-        
-        table_rows += f"""
-            <tr>
-                <td><strong>{tool}</strong></td>
-                <td>{metric['duration_seconds']}</td>
-                <td>{loc_total:,}</td>
-                <td>{files_total:,}</td>
-                <td>{ratio:.6f}</td>
-                <td>{status}</td>
-                <td>{trend_info}</td>
+if __name__ == "__main__":
+    main()
             </tr>
         """
         

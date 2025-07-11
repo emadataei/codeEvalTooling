@@ -19,6 +19,7 @@ jobs:
         run: |
           echo "SONAR_START_TIME=$(date +%s)" >> $GITHUB_ENV
           mkdir -p metrics
+          echo "🚀 Starting SonarQube analysis at $(date)"
       
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v5
@@ -29,6 +30,7 @@ jobs:
         run: |
           chmod +x ./scripts/collect-metrics.sh
           ./scripts/collect-metrics.sh "SonarQube" $SONAR_START_TIME
+          echo "📊 SonarQube metrics collected"
         if: always()
       
       - name: Upload SonarQube metrics
@@ -37,7 +39,7 @@ jobs:
           name: sonarqube-metrics
           path: |
             performance-metrics.jsonl
-            metrics/
+            metrics/sonarqube-metrics.json
         if: always()
 
   codeql:
@@ -59,6 +61,7 @@ jobs:
         run: |
           echo "CODEQL_START_TIME=$(date +%s)" >> $GITHUB_ENV
           mkdir -p metrics
+          echo "🚀 Starting CodeQL analysis for ${{ matrix.language }} at $(date)"
       
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
@@ -78,6 +81,7 @@ jobs:
         run: |
           chmod +x ./scripts/collect-metrics.sh
           ./scripts/collect-metrics.sh "CodeQL-${{ matrix.language }}" $CODEQL_START_TIME
+          echo "📊 CodeQL-${{ matrix.language }} metrics collected"
         if: always()
       
       - name: Upload CodeQL metrics
@@ -86,7 +90,7 @@ jobs:
           name: codeql-metrics-${{ matrix.language }}
           path: |
             performance-metrics.jsonl
-            metrics/
+            metrics/codeql-${{ matrix.language }}-metrics.json
         if: always()
 
   semgrep:
@@ -99,6 +103,7 @@ jobs:
         run: |
           echo "SEMGREP_START_TIME=$(date +%s)" >> $GITHUB_ENV
           mkdir -p metrics
+          echo "🚀 Starting Semgrep analysis at $(date)"
       
       - name: Run Semgrep
         uses: semgrep/semgrep-action@v1
@@ -115,6 +120,7 @@ jobs:
         run: |
           chmod +x ./scripts/collect-metrics.sh
           ./scripts/collect-metrics.sh "Semgrep" $SEMGREP_START_TIME
+          echo "📊 Semgrep metrics collected"
         if: always()
       
       - name: Upload Semgrep metrics
@@ -123,7 +129,7 @@ jobs:
           name: semgrep-metrics
           path: |
             performance-metrics.jsonl
-            metrics/
+            metrics/semgrep-metrics.json
         if: always()
 
   snyk:
@@ -136,6 +142,7 @@ jobs:
         run: |
           echo "SNYK_START_TIME=$(date +%s)" >> $GITHUB_ENV
           mkdir -p metrics
+          echo "🚀 Starting Snyk analysis at $(date)"
       
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -180,6 +187,7 @@ jobs:
         run: |
           chmod +x ./scripts/collect-metrics.sh
           ./scripts/collect-metrics.sh "Snyk" $SNYK_START_TIME
+          echo "📊 Snyk metrics collected"
         if: always()
       
       - name: Upload Snyk metrics
@@ -188,7 +196,7 @@ jobs:
           name: snyk-metrics
           path: |
             performance-metrics.jsonl
-            metrics/
+            metrics/snyk-metrics.json
         if: always()
       
       - name: Upload Snyk results
@@ -212,18 +220,40 @@ jobs:
           pattern: "*-metrics*"
           merge-multiple: true
       
-      - name: Debug - List downloaded files
+      - name: Debug - Show downloaded metrics
         run: |
-          echo "=== Current directory contents ==="
+          echo "=== Downloaded files ==="
           ls -la
-          echo "=== Metrics directory contents ==="
-          ls -la metrics/ || echo "No metrics directory"
+          echo "=== Metrics directory ==="
+          ls -la metrics/ 2>/dev/null || echo "No metrics directory"
           echo "=== Performance metrics file ==="
-          cat performance-metrics.jsonl || echo "No performance-metrics.jsonl file"
+          if [ -f performance-metrics.jsonl ]; then
+            echo "📄 performance-metrics.jsonl exists, content:"
+            cat performance-metrics.jsonl | head -20
+            echo "📊 Total lines in metrics file: $(wc -l < performance-metrics.jsonl)"
+          else
+            echo "❌ No performance-metrics.jsonl file found"
+          fi
+      
+      - name: Merge metrics files (if multiple)
+        run: |
+          # If we have multiple performance-metrics.jsonl files, merge them
+          if ls performance-metrics*.jsonl 1> /dev/null 2>&1; then
+            echo "🔄 Merging multiple metrics files..."
+            cat performance-metrics*.jsonl > merged-performance-metrics.jsonl
+            mv merged-performance-metrics.jsonl performance-metrics.jsonl
+            echo "✅ Merged $(wc -l < performance-metrics.jsonl) metric entries"
+          fi
       
       - name: Generate performance report
         run: |
+          echo "🔄 Generating performance report..."
           python scripts/generate-performance-report.py
+      
+      - name: Show generated files
+        run: |
+          echo "=== Generated files ==="
+          ls -la *.html *.json* metrics/ 2>/dev/null || true
       
       - name: Upload performance report
         uses: actions/upload-artifact@v4
