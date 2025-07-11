@@ -6,7 +6,6 @@ Generate HTML performance report from collected metrics
 import json
 import os
 from datetime import datetime
-from pathlib import Path
 
 def load_metrics():
     """Load all metrics from JSONL file"""
@@ -24,50 +23,42 @@ def load_metrics():
                         continue
     return metrics
 
-def load_historical_metrics():
-    """Load historical metrics for trend analysis"""
-    historical = []
-    if os.path.exists('metrics/historical-metrics.jsonl'):
-        with open('metrics/historical-metrics.jsonl', 'r') as f:
-            for line in f:
-                if line.strip():
-                    historical.append(json.loads(line))
-    return historical
-
-def calculate_trends(current_metrics, historical_metrics):
-    """Calculate performance trends and regressions"""
-    trends = {}
-    
-    for current in current_metrics:
-        tool = current['tool']
-        current_duration = current['duration_seconds']
-        current_ratio = float(current.get('performance_ratio', 0))
-        
-        # Find recent historical data for this tool (last 5 runs)
-        tool_history = [h for h in historical_metrics if h['tool'] == tool]
-        tool_history = sorted(tool_history, key=lambda x: x['timestamp'], reverse=True)[:5]
-        
-        if tool_history:
-            avg_duration = sum(h['duration_seconds'] for h in tool_history) / len(tool_history)
-            avg_ratio = sum(float(h.get('performance_ratio', 0)) for h in tool_history) / len(tool_history)
-            
-            duration_change = ((current_duration - avg_duration) / avg_duration) * 100 if avg_duration > 0 else 0
-            ratio_change = ((current_ratio - avg_ratio) / avg_ratio) * 100 if avg_ratio > 0 else 0
-            
-            trends[tool] = {
-                'duration_change': duration_change,
-                'ratio_change': ratio_change,
-                'historical_runs': len(tool_history),
-                'avg_duration': avg_duration,
-                'avg_ratio': avg_ratio
-            }
-    
-    return trends
-
 def generate_html_report(metrics):
     """Generate HTML report from metrics"""
     
-    html_template = """<!DOCTYPE html>
+    # Calculate summary statistics
+    if not metrics:
+        total_tools = 0
+        total_duration = 0
+        avg_ratio = "N/A"
+        table_rows = '<tr><td colspan="5">No performance data available. Metrics will appear after running security analysis tools.</td></tr>'
+    else:
+        total_tools = len(set(m['tool'] for m in metrics))
+        total_duration = sum(m['duration_seconds'] for m in metrics)
+        avg_ratio = f"{sum(float(m.get('performance_ratio', 0)) for m in metrics) / len(metrics):.6f}"
+        
+        # Generate table rows
+        table_rows = ""
+        for metric in metrics:
+            ratio = float(metric.get('performance_ratio', 0))
+            status = '🚀 Fast' if ratio < 0.001 else '⚡ Normal' if ratio < 0.01 else '🐌 Slow'
+            
+            # Handle different LOC data structures
+            if isinstance(metric.get('lines_of_code'), dict):
+                loc_total = metric['lines_of_code'].get('total', 0)
+            else:
+                loc_total = metric.get('lines_of_code', 0)
+            
+            table_rows += f'''
+            <tr>
+                <td><strong>{metric["tool"]}</strong></td>
+                <td>{metric["duration_seconds"]}</td>
+                <td>{loc_total:,}</td>
+                <td>{ratio:.6f}</td>
+                <td>{status}</td>
+            </tr>'''
+
+    html_template = f'''<!DOCTYPE html>
 <html>
 <head>
     <title>Security Tools Performance Report</title>
@@ -77,43 +68,10 @@ def generate_html_report(metrics):
         table {{ border-collapse: collapse; width: 100%; margin: 20px 0; }}
         th, td {{ border: 1px solid #ddd; padding: 12px; text-align: left; }}
         th {{ background-color: #f2f2f2; font-weight: bold; }}
-        .metric-card {{ background: #f9f9f9; padding: 15px; margin: 10px 0; border-radius: 5px; border-left: 4px solid #007cba; }}
         .summary {{ background: #e8f4fd; padding: 20px; border-radius: 5px; margin: 20px 0; }}
         .warning {{ background: #fff3cd; border: 1px solid #ffeaa7; padding: 10px; border-radius: 5px; color: #856404; }}
-        .success {{ background: #d4edda; border: 1px solid #c3e6cb; padding: 10px; border-radius: 5px; color: #155724; }}
-        .error {{ background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; border-radius: 5px; color: #721c24; }}
-        .trend-up {{ color: #dc3545; font-weight: bold; }}
-        .trend-down {{ color: #28a745; font-weight: bold; }}
-        .trend-stable {{ color: #6c757d; }}
-        .nav-tabs {{ list-style: none; padding: 0; margin: 20px 0; border-bottom: 2px solid #dee2e6; }}
-        .nav-tabs li {{ display: inline-block; margin-right: 10px; }}
-        .nav-tabs a {{ display: block; padding: 10px 20px; text-decoration: none; color: #495057; border: 1px solid transparent; border-radius: 5px 5px 0 0; }}
-        .nav-tabs a.active {{ background: #007cba; color: white; border-color: #007cba; }}
-        .tab-content {{ display: none; }}
-        .tab-content.active {{ display: block; }}
-        .regression-alert {{ background: #f8d7da; border: 1px solid #f5c6cb; padding: 15px; border-radius: 5px; margin: 10px 0; }}
-        .improvement-alert {{ background: #d1ecf1; border: 1px solid #bee5eb; padding: 15px; border-radius: 5px; margin: 10px 0; }}
         .chart-container {{ background: white; padding: 20px; border-radius: 5px; margin: 20px 0; border: 1px solid #dee2e6; }}
     </style>
-    <script>
-        function showTab(tabName) {{
-            // Hide all tab contents
-            var contents = document.getElementsByClassName('tab-content');
-            for (var i = 0; i < contents.length; i++) {
-                contents[i].classList.remove('active');
-            }
-            
-            // Remove active class from all tabs
-            var tabs = document.getElementsByClassName('nav-link');
-            for (var i = 0; i < tabs.length; i++) {
-                tabs[i].classList.remove('active');
-            }
-            
-            // Show selected tab content and mark tab as active
-            document.getElementById(tabName).classList.add('active');
-            event.target.classList.add('active');
-        }
-    </script>
 </head>
 <body>
     <div class="container">
@@ -125,15 +83,28 @@ def generate_html_report(metrics):
                 <div><h3>{total_tools}</h3><p>Tools Analyzed</p></div>
                 <div><h3>{total_duration}s</h3><p>Total Analysis Time</p></div>
                 <div><h3>{avg_ratio}</h3><p>Avg Performance Ratio</p></div>
-                <div><h3>{timestamp}</h3><p>Generated</p></div>
+                <div><h3>{datetime.now().strftime('%Y-%m-%d %H:%M UTC')}</h3><p>Generated</p></div>
             </div>
         </div>
 
-        {alerts_section}
+        {"" if metrics else '<div class="warning"><p>⚠️ No metrics collected yet. Run the workflow to see performance data.</p></div>'}
 
-        <div id="overview" class="tab-content active">
+        <div>
             <h2>🎯 Performance Overview</h2>
-            {table_content}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tool</th>
+                        <th>Duration (s)</th>
+                        <th>Lines of Code</th>
+                        <th>Performance Ratio (s/LOC)</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {table_rows}
+                </tbody>
+            </table>
         </div>
 
         <div class="chart-container">
@@ -151,44 +122,9 @@ def generate_html_report(metrics):
         </div>
     </div>
 </body>
-</html>"""
+</html>'''
 
-    # Process metrics or show empty state
-    if not metrics:
-        return html_template.format(
-            total_tools=0,
-            total_duration=0,
-            avg_ratio="N/A",
-            timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC'),
-            alerts_section='<div class="warning"><p>⚠️ No metrics collected yet. Run the workflow to see performance data.</p></div>',
-            table_content='<p>No performance data available. Metrics will appear after running security analysis tools.</p>'
-        )
-
-    # Calculate summary statistics
-    total_tools = len(set(m['tool'] for m in metrics))
-    total_duration = sum(m['duration_seconds'] for m in metrics)
-    avg_ratio = sum(float(m.get('performance_ratio', 0)) for m in metrics) / len(metrics)
-
-    # Generate table content
-    table_content = '<table><thead><tr><th>Tool</th><th>Duration (s)</th><th>Lines of Code</th><th>Performance Ratio</th><th>Status</th></tr></thead><tbody>'
-    
-    for metric in metrics:
-        ratio = float(metric.get('performance_ratio', 0))
-        status = '🚀 Fast' if ratio < 0.001 else '⚡ Normal' if ratio < 0.01 else '🐌 Slow'
-        loc_total = metric.get('lines_of_code', {}).get('total', 0) if isinstance(metric.get('lines_of_code'), dict) else metric.get('lines_of_code', 0)
-        
-        table_content += f'<tr><td><strong>{metric["tool"]}</strong></td><td>{metric["duration_seconds"]}</td><td>{loc_total:,}</td><td>{ratio:.6f}</td><td>{status}</td></tr>'
-    
-    table_content += '</tbody></table>'
-
-    return html_template.format(
-        total_tools=total_tools,
-        total_duration=total_duration,
-        avg_ratio=f"{avg_ratio:.6f}",
-        timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC'),
-        alerts_section="",
-        table_content=table_content
-    )
+    return html_template
 
 def main():
     """Main function"""
@@ -196,8 +132,8 @@ def main():
     
     # Debug: Show what files exist
     print("📁 Checking for metrics files...")
-    current_files = os.listdir('.')
-    print(f"Current directory files: {[f for f in current_files if 'metrics' in f or f.endswith('.jsonl')]}")
+    current_files = [f for f in os.listdir('.') if 'metrics' in f or f.endswith('.jsonl')]
+    print(f"Current directory files: {current_files}")
     
     if os.path.exists('metrics'):
         metrics_files = os.listdir('metrics')
@@ -209,7 +145,71 @@ def main():
             content = f.read()
             print(f"📄 Metrics file content preview (first 500 chars):")
             print(content[:500])
-            print("..." if len(content) > 500 else "")
+            if len(content) > 500:
+                print("...")
+    
+    # Load metrics
+    metrics = load_metrics()
+    
+    if not metrics:
+        print("⚠️  No metrics found. Creating empty report.")
+    else:
+        print(f"✅ Found {len(metrics)} metric entries")
+        for i, metric in enumerate(metrics, 1):
+            print(f"  {i}. {metric.get('tool', 'Unknown')}: {metric.get('duration_seconds', 0)}s")
+    
+    try:
+        # Generate HTML report
+        html_report = generate_html_report(metrics)
+        
+        # Write HTML report
+        with open('performance-report.html', 'w') as f:
+            f.write(html_report)
+        
+        # Create metrics directory
+        os.makedirs('metrics', exist_ok=True)
+        
+        # Generate summary JSON
+        summary = {
+            "timestamp": datetime.now().isoformat(),
+            "total_tools": len(set(m['tool'] for m in metrics)) if metrics else 0,
+            "total_duration": sum(m['duration_seconds'] for m in metrics) if metrics else 0,
+            "metrics_count": len(metrics),
+            "tools": list(set(m['tool'] for m in metrics)) if metrics else [],
+            "access_instructions": {
+                "html_report": "performance-report.html",
+                "raw_metrics": "performance-metrics.jsonl",
+                "github_artifacts": "Download 'performance-metrics-report' from Actions tab",
+                "security_results": "Check repository Security tab for SARIF uploads",
+                "regression_alerts": "Check workflow logs for regression warnings"
+            }
+        }
+        
+        with open('metrics/performance-summary.json', 'w') as f:
+            json.dump(summary, f, indent=2)
+        
+        print(f"✅ Performance report generated: performance-report.html")
+        print(f"📊 Total metrics collected: {len(metrics)}")
+        print(f"🔧 Tools analyzed: {summary['total_tools']}")
+        print("\n📍 Where to access results:")
+        print("  • HTML Report: performance-report.html (download from GitHub Actions artifacts)")
+        print("  • Security Findings: GitHub repo → Security tab → Code scanning alerts")
+        print("  • Raw Metrics: performance-metrics.jsonl")
+        print("  • Workflow Logs: GitHub repo → Actions tab → specific workflow run")
+        print("  • Regression Alerts: Printed in workflow logs with 🚨 prefix")
+        
+    except Exception as e:
+        print(f"❌ Error generating report: {e}")
+        import traceback
+        traceback.print_exc()
+        # Create a minimal error report
+        error_html = f"<html><body><h1>Error generating report</h1><p>{e}</p><pre>{traceback.format_exc()}</pre></body></html>"
+        with open('performance-report.html', 'w') as f:
+            f.write(error_html)
+        raise
+
+if __name__ == "__main__":
+    main()
     
     metrics = load_metrics()
     
@@ -342,54 +342,6 @@ if __name__ == "__main__":
         recommendations_section=recommendations_section
     )
 
-def main():
-    """Main function"""
-    print("🔄 Generating performance report...")
-    
-    metrics = load_metrics()
-    
-    if not metrics:
-        print("⚠️  No metrics found. Creating empty report.")
-        metrics = []
-    
-    html_report = generate_html_report(metrics)
-    
-    # Write HTML report
-    with open('performance-report.html', 'w') as f:
-        f.write(html_report)
-    
-    # Create metrics directory
-    os.makedirs('metrics', exist_ok=True)
-    
-    # Generate summary JSON with access instructions
-    summary = {
-        "timestamp": datetime.now().isoformat(),
-        "total_tools": len(set(m['tool'] for m in metrics)),
-        "total_duration": sum(m['duration_seconds'] for m in metrics),
-        "metrics_count": len(metrics),
-        "tools": list(set(m['tool'] for m in metrics)),
-        "access_instructions": {
-            "html_report": "performance-report.html",
-            "raw_metrics": "performance-metrics.jsonl",
-            "github_artifacts": "Download 'performance-metrics-report' from Actions tab",
-            "security_results": "Check repository Security tab for SARIF uploads",
-            "regression_alerts": "Check workflow logs for regression warnings"
-        }
-    }
-    
-    with open('metrics/performance-summary.json', 'w') as f:
-        json.dump(summary, f, indent=2)
-    
-    # Print access information
-    print(f"✅ Performance report generated: performance-report.html")
-    print(f"📊 Total metrics collected: {len(metrics)}")
-    print(f"🔧 Tools analyzed: {summary['total_tools']}")
-    print("\n📍 Where to access results:")
-    print("  • HTML Report: performance-report.html (download from GitHub Actions artifacts)")
-    print("  • Security Findings: GitHub repo → Security tab → Code scanning alerts")
-    print("  • Raw Metrics: performance-metrics.jsonl")
-    print("  • Workflow Logs: GitHub repo → Actions tab → specific workflow run")
-    print("  • Regression Alerts: Printed in workflow logs with 🚨 prefix")
 
 if __name__ == "__main__":
     main()
