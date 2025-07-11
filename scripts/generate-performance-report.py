@@ -11,7 +11,7 @@ def load_metrics():
     """Load all metrics from JSONL file"""
     metrics = []
     if os.path.exists('performance-metrics.jsonl'):
-        with open('performance-metrics.jsonl', 'r') as f:
+        with open('performance-metrics.jsonl', 'r', encoding='utf-8') as f:
             for line_num, line in enumerate(f, 1):
                 line = line.strip()
                 if line:
@@ -141,7 +141,7 @@ def main():
     
     # Debug: Show content of metrics file if it exists
     if os.path.exists('performance-metrics.jsonl'):
-        with open('performance-metrics.jsonl', 'r') as f:
+        with open('performance-metrics.jsonl', 'r', encoding='utf-8') as f:
             content = f.read()
             print(f"📄 Metrics file content preview (first 500 chars):")
             print(content[:500])
@@ -163,7 +163,7 @@ def main():
         html_report = generate_html_report(metrics)
         
         # Write HTML report
-        with open('performance-report.html', 'w') as f:
+        with open('performance-report.html', 'w', encoding='utf-8') as f:
             f.write(html_report)
         
         # Create metrics directory
@@ -185,7 +185,7 @@ def main():
             }
         }
         
-        with open('metrics/performance-summary.json', 'w') as f:
+        with open('metrics/performance-summary.json', 'w', encoding='utf-8') as f:
             json.dump(summary, f, indent=2)
         
         print(f"✅ Performance report generated: performance-report.html")
@@ -204,7 +204,7 @@ def main():
         traceback.print_exc()
         # Create a minimal error report
         error_html = f"<html><body><h1>Error generating report</h1><p>{e}</p><pre>{traceback.format_exc()}</pre></body></html>"
-        with open('performance-report.html', 'w') as f:
+        with open('performance-report.html', 'w', encoding='utf-8') as f:
             f.write(error_html)
         raise
 

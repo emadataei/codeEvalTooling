@@ -4,3 +4,15 @@ node_modules/
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+
+# Performance metrics and reports (generated during CI/testing)
+performance-metrics.jsonl
+performance-report.html
+metrics/
+*-metrics.json
+*-results.json
+*-results.sarif
+historical-metrics.jsonl
+
+# Test files
+*.ps1

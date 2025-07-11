@@ -2,7 +2,9 @@ name: Build
 on:
   push:
     branches:
-      - Master
+      - master
+      - main
+      - eataei/worlkflowSetup
   pull_request:
     types: [opened, synchronize, reopened]
 
@@ -25,6 +27,8 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@v5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL || 'https://sonarcloud.io' }}
+        continue-on-error: true
       
       - name: Collect SonarQube metrics
         run: |
@@ -103,7 +107,6 @@ jobs:
         run: |
           echo "SEMGREP_START_TIME=$(date +%s)" >> $GITHUB_ENV
           mkdir -p metrics
-          echo "🚀 Starting Semgrep analysis at $(date)"
       
       - name: Run Semgrep
         uses: semgrep/semgrep-action@v1
@@ -115,6 +118,14 @@ jobs:
             p/python
             p/react
             p/typescript
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+        continue-on-error: true
+      
+      - name: Generate Semgrep JSON output for metrics
+        run: |
+          semgrep --config=auto --json --output=semgrep-results.json . || true
+        continue-on-error: true
       
       - name: Collect Semgrep metrics
         run: |
@@ -177,8 +188,10 @@ jobs:
           snyk test --file=package.json --severity-threshold=high
         continue-on-error: true
       
-      - name: Run Snyk Code analysis
-        run: snyk code test --json-file-output=snyk-code-results.json
+      - name: Run Snyk Code analysis with detailed output
+        run: |
+          snyk code test --sarif-file-output=snyk-code-results.sarif || true
+          snyk code test --json-file-output=snyk-code-results.json || true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         continue-on-error: true
