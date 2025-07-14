@@ -2,8 +2,13 @@
 """
 Quality Gate Analysis Script for GitHub Actions.
 
-This script analyzes changed files with the Quality Gate system
-and outputs results for GitHub Actions workflows.
+This script analyzes changed files with the Quality Ga    # Exit with error code if quality gate fails
+    if not result['passed']:
+        sys.exit(1)
+
+
+if __name__ == '__main__':
+    main()ts results for GitHub Actions workflows.
 """
 
 import sys
@@ -20,7 +25,6 @@ from scoring.quality_gate import QualityGate
 def analyze_changed_files(file_list):
     """Analyze changed files with quality gate."""
     if not file_list.strip():
-        print("No code files changed, skipping quality gate")
         return {
             'passed': True,
             'score': 100,
@@ -68,11 +72,10 @@ def analyze_changed_files(file_list):
                 'language': language
             })
             
-        except Exception as e:
-            print(f"Warning: Could not read file {file_path}: {e}")
+        except Exception:
+            pass  # Skip files that can't be read
     
     if not pr_files:
-        print("No valid code files found")
         return {
             'passed': True,
             'score': 100,
@@ -122,11 +125,6 @@ def main():
     changed_files = os.getenv('CHANGED_FILES', '')
     result = analyze_changed_files(changed_files)
     
-    # Output results for GitHub Actions
-    print(f"Quality Gate Result: {result['summary']}")
-    print(f"Quality Score: {result['score']}/100")
-    print(f"Blocking Issues: {result['blocking_issues']}")
-    
     # Set outputs for GitHub Actions
     github_output = os.getenv('GITHUB_OUTPUT')
     if github_output:
@@ -140,22 +138,9 @@ def main():
     with open('quality-gate-results.json', 'w') as f:
         json.dump(result, f, indent=2)
     
-    # Exit with error if quality gate failed
+    # Exit with error code if quality gate fails
     if not result['passed']:
-        print("\nQuality Gate FAILED - Blocking issues must be fixed!")
-        for issue in result['issues']['blocking']:
-            print(f"  BLOCKING {issue['category']}: {issue['message']}")
-            if issue['file'] != 'PR':
-                print(f"     Location: {issue['file']}:{issue['line']}")
-            if issue['suggestion']:
-                print(f"     Suggestion: {issue['suggestion']}")
         sys.exit(1)
-    else:
-        print(f"\nQuality Gate PASSED")
-        if result['issues']['warning']:
-            print("Warnings found:")
-            for issue in result['issues']['warning']:
-                print(f"  WARNING {issue['category']}: {issue['message']}")
 
 
 if __name__ == '__main__':

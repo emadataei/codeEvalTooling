@@ -36,7 +36,6 @@ except ImportError:
 def run_cognitive_analysis(file_list, quality_penalty=0):
     """Run cognitive analysis on changed files."""
     if not file_list.strip():
-        print("No code files changed, assigning Tier 0")
         return {
             'tier': 0,
             'total_score': 0,
@@ -52,9 +51,7 @@ def run_cognitive_analysis(file_list, quality_penalty=0):
             analyzer = CognitiveAnalyzer()
         else:
             raise ImportError("Cognitive analyzer dependencies not available")
-    except Exception as e:
-        print(f"Warning: Could not initialize AI client: {e}")
-        print("Falling back to static analysis only")
+    except Exception:
         # Create a minimal analyzer without AI
         class MinimalAnalyzer:
             def analyze_pr(self, _files):
@@ -102,11 +99,10 @@ def run_cognitive_analysis(file_list, quality_penalty=0):
                 'language': language
             })
             
-        except Exception as e:
-            print(f"Warning: Could not read file {file_path}: {e}")
+        except Exception:
+            pass  # Skip files that can't be read
     
     if not pr_files:
-        print("No valid code files found")
         return {
             'tier': 0,
             'total_score': quality_penalty,
@@ -157,17 +153,10 @@ def main():
         with open('quality-gate-results.json', 'r') as f:
             quality_results = json.load(f)
             quality_penalty = quality_results.get('penalty', 0)
-            print(f"Quality penalty from gate: {quality_penalty}")
-    except Exception as e:
-        print(f"Could not load quality results: {e}")
+    except Exception:
+        pass  # Use default quality penalty of 0
     
     result = run_cognitive_analysis(changed_files, quality_penalty)
-    
-    # Output results for GitHub Actions
-    print("Cognitive Analysis Result:")
-    print(f"  Tier: {result['tier']}")
-    print(f"  Total Score: {result['total_score']}")
-    print(f"  Reasoning: {result['reasoning']}")
     
     # Set outputs for GitHub Actions
     github_output = os.getenv('GITHUB_OUTPUT')
@@ -178,10 +167,9 @@ def main():
             f.write(f"reasoning={result['reasoning']}\n")
     
     # Create detailed results file
+    # Create detailed results file
     with open('cognitive-analysis-results.json', 'w') as f:
         json.dump(result, f, indent=2)
-    
-    print(f"\nCognitive Analysis Complete - Assigned to Tier {result['tier']}")
 
 
 if __name__ == '__main__':
