@@ -161,21 +161,55 @@ cat > "$TEMP_JSON_FILE" << JSONEOF
 JSONEOF
 
 # Convert to single line JSON and append to metrics file
-if command -v jq >/dev/null 2>&1; then
-    # Use jq to create compact JSON
-    jq -c '.' "$TEMP_JSON_FILE" >> performance-metrics.jsonl
+# Always use Python for consistent JSON formatting across environments
+if command -v python3 >/dev/null 2>&1; then
+    echo "🔧 Using Python3 for JSON formatting"
+    python3 -c "
+import json
+with open('$TEMP_JSON_FILE', 'r') as f:
+    data = json.load(f)
+compact_json = json.dumps(data, separators=(',', ':'))
+with open('performance-metrics.jsonl', 'a') as f:
+    f.write(compact_json + '\n')
+print(f'✅ Added compact JSON entry ({len(compact_json)} characters)')
+"
+elif command -v python >/dev/null 2>&1; then
+    echo "🔧 Using Python for JSON formatting"
+    python -c "
+import json
+with open('$TEMP_JSON_FILE', 'r') as f:
+    data = json.load(f)
+compact_json = json.dumps(data, separators=(',', ':'))
+with open('performance-metrics.jsonl', 'a') as f:
+    f.write(compact_json + '\n')
+print('✅ Added compact JSON entry')
+"
+elif command -v jq >/dev/null 2>&1; then
+    echo "🔧 Using jq for JSON formatting"
+    # Force compact output and ensure it's a single line
+    jq -c -M '.' "$TEMP_JSON_FILE" | tr -d '\n\r' >> performance-metrics.jsonl
+    echo "" >> performance-metrics.jsonl
 else
-    # Fallback: use Python if available, otherwise manual approach
-    if command -v python3 >/dev/null 2>&1; then
-        python3 -c "import json; import sys; print(json.dumps(json.load(open('$TEMP_JSON_FILE')), separators=(',', ':')))" >> performance-metrics.jsonl
-    elif command -v python >/dev/null 2>&1; then
-        python -c "import json; import sys; print(json.dumps(json.load(open('$TEMP_JSON_FILE')), separators=(',', ':')))" >> performance-metrics.jsonl
+    echo "❌ Error: No JSON processor available (Python or jq required)"
+    exit 1
+fi
+
+# Debug: Check what was actually written
+echo "🔍 Verifying JSONL format..."
+if [ -f performance-metrics.jsonl ]; then
+    LAST_LINE=$(tail -1 performance-metrics.jsonl)
+    echo "   Last entry length: ${#LAST_LINE} characters"
+    echo "   Last entry preview: ${LAST_LINE:0:100}..."
+    
+    # Count lines in the last JSON object (should be 1)
+    NEWLINE_COUNT=$(echo "$LAST_LINE" | grep -o $'\n' | wc -l)
+    if [ "$NEWLINE_COUNT" -eq 0 ]; then
+        echo "   ✅ Single-line JSON confirmed"
     else
-        # Last resort: manual compaction (not ideal but better than broken JSON)
-        echo "⚠️  No jq or Python available, using manual JSON compaction"
-        # Remove all whitespace and newlines, but preserve string content
-        cat "$TEMP_JSON_FILE" | tr -d '\n\r' | sed 's/[[:space:]]*:[[:space:]]*/:/g' | sed 's/[[:space:]]*,[[:space:]]*/,/g' | sed 's/[[:space:]]*{[[:space:]]*/{/g' | sed 's/[[:space:]]*}[[:space:]]*/}/g' | sed 's/[[:space:]]*\[[[:space:]]*/[/g' | sed 's/[[:space:]]*\][[:space:]]*/]/g' >> performance-metrics.jsonl
+        echo "   ❌ Warning: Multi-line JSON detected ($NEWLINE_COUNT newlines)"
     fi
+else
+    echo "   ❌ Warning: performance-metrics.jsonl not found"
 fi
 
 # Also create individual tool metric file for debugging
