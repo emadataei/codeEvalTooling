@@ -1,89 +1,63 @@
-# AI Code Review Workflow
+# 🧠 AI-Era Code Review Strategy
 
-This repository supports a modern, AI-assisted code development workflow. To ensure **code quality** and **review velocity**, we follow a **Tiered Code Review System**.
+## Hypothesis
 
----
-
-## 🚦 Tiered Code Review System
-
-| Tier | Description | Review Method |
-|------|-------------|----------------|
-| **Tier 0** | Automated checks on AI-generated code | ✅ Linting, formatting, type-checking, unit tests, security scans |
-| **Tier 1** | Simple, isolated changes (e.g., docs, config tweaks, scoped functions) | ✅ Auto-approve or fast-track with minimal review |
-| **Tier 2** | Complex, architectural, or business logic changes | ✅ Full manual review, discussion, and validation |
+> In the modern world of AI-assisted development, **code generation is fast and easy**. However, **human comprehension of that code is the bottleneck**. To sustain quality and velocity, human review effort must be allocated based on **risk, impact, and clarity** — not volume.
 
 ---
 
-## ✅ Automated Review Checks (Tier 0)
+## 🚦 Tiered Code Review Framework
 
-Every PR must pass the following automated gates:
+We use a **tiered code review system** to manage the high volume of AI-generated code, reduce code-to-merge time, and maintain engineering quality.
 
-- ✅ Code format (Prettier, Black, etc.)
-- ✅ Linting & static analysis (ESLint, PyLint, SonarQube)
-- ✅ Type safety (TypeScript, MyPy, etc.)
-- ✅ Unit test coverage & success
-- ✅ Security scanning (Bandit, Trivy, etc.)
-
----
-
-## 🤖 AI Guidelines for PRs
-
-All AI-generated code **must** include:
-
-- 📄 A description of what was implemented and why
-- 🔍 Edge cases considered
-- 🧪 Tests created or assumptions made
-
-*Example prompt:*
-> "Generate a PR-ready code block with a one-line summary, implementation breakdown, and test description."
+| Tier | Description | Who Reviews | Criteria |
+|------|-------------|-------------|----------|
+| **Tier 0** | 🔄 **Automated Approval** | No humans | - Trivial changes (formatting, comments)<br>- Auto-generated types/docs/tests<br>- CI green light |
+| **Tier 1** | 👀 **Light Review** | One engineer | - Scoped, well-tested changes<br>- Minor features or tweaks<br>- Clear AI rationale in PR |
+| **Tier 2** | 🔎 **Deep Review** | One or more domain experts | - Business logic<br>- Security, data access<br>- Infra/schema/migrations<br>- Unclear or critical AI-generated code |
 
 ---
 
-## 🔍 Human Review Guidelines
+## 🔧 Review Criteria Rubric
 
-Focus human attention on:
-
-- ⚠️ Business-critical logic
-- 🔐 Security and infrastructure changes
-- 🔄 External dependencies or API contracts
-- 🤝 Cross-team integrations
-
----
-
-## 🧠 AI Review Assistants (Optional)
-
-We support AI reviewer agents that:
-
-- Summarize diffs by behavior, not just lines
-- Suggest improvements based on prior codebase patterns
-- Flag missing tests or anti-patterns
-
-You’ll see these comments automatically when submitting a PR.
+| Attribute | Tier 0 | Tier 1 | Tier 2 |
+|-----------|--------|--------|--------|
+| **Lines of Code (LOC)** | < 30 | < 200 | > 200 or cross-module |
+| **Test Coverage** | Not required | Required | Required + test plan |
+| **Impact Surface** | None or internal-only | Minor known modules | External APIs, DB, shared infra |
+| **AI Involvement** | Fully deterministic | Includes PR summary | Requires deeper human validation |
+| **Rollback Risk** | No impact | Easy to revert | Difficult or high-risk |
 
 ---
 
-## 🚀 Review Acceleration Tips
+## 🛠 Tooling & Automation
 
-- ✅ Keep PRs small and focused
-- ✅ Use clear commit messages and PR descriptions
-- ✅ Tag reviewers by ownership and risk area
-- ✅ Let automation handle the easy stuff—focus humans on the hard parts
-
----
-
-## 📈 Metrics We Track
-
-To continuously improve, we track:
-
-- ⏱️ Code-to-PR-to-merge time
-- 📉 Auto-reject rate from Tier 0
-- ✅ PRs approved without human touch
-- 🧪 Test coverage & AI hallucination incidents
+- ✅ **CI Enforced Checks**: Lint, type safety, tests (Tier 0)
+- 🤖 **AI Classification**: PRs must declare if AI-generated
+- 📝 **Structured PR Template**: Captures purpose, test strategy, AI rationale
+- 🏷 **PR Labeling**: Automatically assigned via GitHub Actions (`tier:0-auto`, `tier:1-quick`, `tier:2-deep`)
+- ⏱ **Review SLAs**:
+  - Tier 0: Merge on green
+  - Tier 1: Review within 12 hours
+  - Tier 2: Review within 24–48 hours
 
 ---
 
-## 📬 Feedback
+## 📈 Philosophy
 
-Spotted an issue or want to improve the workflow? Please open a PR or reach out to the #ai-dev-workflow Slack channel.
+- 🧠 **Code clarity > cleverness**  
+- ⚖️ **Comprehension scales with risk, not volume**  
+- 💬 **AI should explain itself** — every agentic change must come with intent and rationale  
+- 🧪 **Automate what’s predictable, review what’s impactful**  
 
 ---
+
+## 📚 Related
+
+- `REVIEW_GUIDELINES.md`: In-depth examples and edge case policies
+- `PR_TEMPLATE.md`: Standard format to ensure clarity and tier classification
+- `.github/workflows/`: Automation for review flow
+
+---
+
+*This repo reflects our evolving approach to building in the age of autonomous agents. We welcome contributions to improve both the code and the process.*
