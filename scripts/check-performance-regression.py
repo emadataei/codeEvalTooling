@@ -20,7 +20,7 @@ def load_current_metrics(filepath):
                     try:
                         metrics.append(json.loads(line))
                     except json.JSONDecodeError as e:
-                        print(f"⚠️  Warning: Skipping malformed JSON on line {line_num}: {e}")
+                    print(f"WARNING: Skipping malformed JSON on line {line_num}: {e}")
                         print(f"   Line content: {line[:100]}...")
                         continue
     return metrics
@@ -42,7 +42,7 @@ def load_historical_metrics():
                 try:
                     metrics.append(json.loads(line))
                 except json.JSONDecodeError as e:
-                    print(f"⚠️  Warning: Skipping malformed JSON in historical data on line {line_num}: {e}")
+                    print(f"WARNING: Skipping malformed JSON in historical data on line {line_num}: {e}")
                     continue
     
     return metrics
@@ -129,40 +129,40 @@ def main():
     
     args = parser.parse_args()
     
-    print(f"🔍 Checking for performance regressions (threshold: {args.threshold}%)")
+    print(f"Checking for performance regressions (threshold: {args.threshold}%)")
     
     # Debug: Show file contents
     if os.path.exists(args.current_metrics):
-        print(f"📄 Reading metrics from: {args.current_metrics}")
+        print(f"Reading metrics from: {args.current_metrics}")
         with open(args.current_metrics, 'r', encoding='utf-8') as f:
             content = f.read()
-            print(f"📊 File size: {len(content)} characters")
+            print(f"File size: {len(content)} characters")
             if content:
-                print(f"📝 First 200 characters: {content[:200]}")
+                print(f"First 200 characters: {content[:200]}")
     else:
-        print(f"❌ Metrics file not found: {args.current_metrics}")
+        print(f"ERROR: Metrics file not found: {args.current_metrics}")
         return 0
     
     current_metrics = load_current_metrics(args.current_metrics)
     historical_metrics = load_historical_metrics()
     
     if not current_metrics:
-        print("⚠️  No current metrics found")
+        print("WARNING: No current metrics found")
         return 0
     
     regressions, improvements = check_regression(current_metrics, historical_metrics, args.threshold)
     
     # Report results
     if regressions:
-        print(f"🚨 Performance regressions detected ({len(regressions)}):")
+        print(f"ALERT: Performance regressions detected ({len(regressions)}):")
         for reg in regressions:
             print(f"  - {reg['tool']} ({reg['type']}): {reg['change_percent']:.1f}% slower")
             print(f"    Current: {reg['current']:.3f}, Baseline: {reg['baseline']:.3f}")
     else:
-        print("✅ No performance regressions detected")
+        print("SUCCESS: No performance regressions detected")
     
     if improvements:
-        print(f"🚀 Performance improvements detected ({len(improvements)}):")
+        print(f"IMPROVEMENT: Performance improvements detected ({len(improvements)}):")
         for imp in improvements:
             print(f"  - {imp['tool']} ({imp['type']}): {abs(imp['change_percent']):.1f}% faster")
     
@@ -173,7 +173,7 @@ def main():
             f.write(json.dumps(metric) + '\n')
     
     if regressions and args.fail_on_regression:
-        print("❌ Failing due to performance regressions")
+        print("ERROR: Failing due to performance regressions")
         return 1
     
     return 0

@@ -271,6 +271,14 @@ The current Github Actions workflows expect these secrets:
 * `LATEST_CHANGES`
 * `SMOKESHOW_AUTH_KEY`
 
+### AI Foundry Secrets (for cognitive scoring)
+
+For AI-powered code analysis, configure these secrets:
+
+* `AI_FOUNDRY_ENDPOINT` (required)
+* `AI_FOUNDRY_MODEL` (optional, defaults to gpt-4o)
+* `AI_FOUNDRY_TOKEN` (optional if using DefaultAzureCredential)
+
 ## GitHub Action Deployment Workflows
 
 There are GitHub Action workflows in the `.github/workflows` directory already configured for deploying to the environments (GitHub Actions runners with the labels):
