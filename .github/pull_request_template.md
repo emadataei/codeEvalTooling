@@ -1,4 +1,4 @@
-# 🚀 Pull Request Template
+# Pull Request Template
 
 ## Summary
 
@@ -16,7 +16,7 @@ _How did you test this? Are there new or updated tests?_
 
 ---
 
-## 🤖 AI Involvement
+## AI Involvement
 
 - [ ] AI-generated code
 - [ ] AI-assisted code review
@@ -38,7 +38,7 @@ _If AI-generated, summarize the process briefly:_
 
 ---
 
-## ✅ Checklist
+## Checklist
 
 - [ ] Code is readable and clearly structured
 - [ ] PR includes rationale and test plan
