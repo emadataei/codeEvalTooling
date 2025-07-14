@@ -20,7 +20,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install azure-ai-inference azure-identity PyGithub sonarqube-api pylint
+          pip install azure-ai-inference azure-identity PyGithub sonarqube-api pylint black isort
 
       - name: Run Static Analysis
         run: |
