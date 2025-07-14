@@ -129,7 +129,8 @@ class QualityGate:
         
         # Calculate overall quality score and determine if gate passes
         quality_score = self._calculate_quality_score(blocking_issues, warning_issues, advisory_issues)
-        passed = len(blocking_issues) == 0 and quality_score >= 60
+        # Quality gate passes if there are no blocking issues (warnings and advisory are not blocking)
+        passed = len(blocking_issues) == 0
         quality_penalty = self._calculate_quality_penalty(blocking_issues, warning_issues)
         
         summary = self._generate_summary(passed, quality_score, blocking_issues, warning_issues)
@@ -201,17 +202,6 @@ class QualityGate:
             print_matches = re.finditer(self.code_smell_patterns['print_debug'], content)
             for match in print_matches:
                 line_no = content[:match.start()].count('\n') + 1
-                line_content = content.split('\n')[line_no - 1] if line_no <= len(content.split('\n')) else ""
-                
-                # Skip print statements that are clearly legitimate (not debug)
-                if any(keyword in line_content.lower() for keyword in [
-                    'result', 'output', 'summary', 'analysis', 'warning', 'error',
-                    'github', 'quality gate', 'cognitive', 'failed', 'passed',
-                    'location:', 'suggestion:', 'blocking', 'found', 'could not',
-                    'no valid', 'complete'
-                ]):
-                    continue
-                    
                 issues.append(QualityIssue(
                     level=QualityLevel.WARNING,
                     category=CATEGORY_CODE_QUALITY,
@@ -366,14 +356,16 @@ class QualityGate:
         """Calculate overall quality score (0-100)."""
         base_score = 100
         
-        # Heavy penalty for blocking issues
-        base_score -= len(blocking) * 30
+        # Heavy penalty for blocking issues (these should block the PR)
+        base_score -= len(blocking) * 50
         
-        # Moderate penalty for warnings
-        base_score -= len(warning) * 5
+        # Moderate penalty for warnings (up to 5 points each, capped at 40 total)
+        warning_penalty = min(len(warning) * 5, 40)
+        base_score -= warning_penalty
         
-        # Light penalty for advisory
-        base_score -= len(advisory) * 1
+        # Light penalty for advisory (up to 1 point each, capped at 10 total)
+        advisory_penalty = min(len(advisory) * 1, 10)
+        base_score -= advisory_penalty
         
         return max(0, min(100, base_score))
     
