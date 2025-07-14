@@ -126,72 +126,48 @@ echo "⚡ Performance ratio: $PERFORMANCE_RATIO s/LOC"
 # Create metrics directory if it doesn't exist
 mkdir -p metrics
 
-# Create the JSON entry using a temporary file to avoid shell variable length limits
-TEMP_JSON_FILE=$(mktemp)
-cat > "$TEMP_JSON_FILE" << JSONEOF
-{
-  "tool": "$TOOL_NAME",
-  "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "duration_seconds": $DURATION,
-  "security_findings": {
-    "total_vulnerabilities": $VULNERABILITIES_TOTAL,
-    "high_severity": $VULNERABILITIES_HIGH,
-    "medium_severity": $VULNERABILITIES_MEDIUM,
-    "low_severity": $VULNERABILITIES_LOW,
-    "top_issues": "$ISSUES_FOUND"
-  },
-  "lines_of_code": {
-    "total": $LOC_TOTAL,
-    "python": $LOC_PYTHON,
-    "javascript": $LOC_JS,
-    "typescript": $LOC_TS
-  },
-  "files_analyzed": {
-    "total": $FILES_TOTAL,
-    "python": $FILES_PYTHON,
-    "javascript": $FILES_JS,
-    "typescript": $FILES_TS
-  },
-  "repository_size_kb": $REPO_SIZE,
-  "commit_sha": "${GITHUB_SHA:-unknown}",
-  "branch": "${GITHUB_REF_NAME:-unknown}",
-  "workflow_run_id": "${GITHUB_RUN_ID:-unknown}",
-  "performance_ratio": $PERFORMANCE_RATIO
-}
-JSONEOF
+# Create the JSON entry directly in compact format to avoid any formatting issues
+# Build JSON string programmatically to ensure single-line output
+JSON_STRING="{\"tool\":\"$TOOL_NAME\",\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"duration_seconds\":$DURATION,\"security_findings\":{\"total_vulnerabilities\":$VULNERABILITIES_TOTAL,\"high_severity\":$VULNERABILITIES_HIGH,\"medium_severity\":$VULNERABILITIES_MEDIUM,\"low_severity\":$VULNERABILITIES_LOW,\"top_issues\":\"$ISSUES_FOUND\"},\"lines_of_code\":{\"total\":$LOC_TOTAL,\"python\":$LOC_PYTHON,\"javascript\":$LOC_JS,\"typescript\":$LOC_TS},\"files_analyzed\":{\"total\":$FILES_TOTAL,\"python\":$FILES_PYTHON,\"javascript\":$FILES_JS,\"typescript\":$FILES_TS},\"repository_size_kb\":$REPO_SIZE,\"commit_sha\":\"${GITHUB_SHA:-unknown}\",\"branch\":\"${GITHUB_REF_NAME:-unknown}\",\"workflow_run_id\":\"${GITHUB_RUN_ID:-unknown}\",\"performance_ratio\":$PERFORMANCE_RATIO}"
 
-# Convert to single line JSON and append to metrics file
-# Always use Python for consistent JSON formatting across environments
+# Validate and write the JSON
 if command -v python3 >/dev/null 2>&1; then
-    echo "🔧 Using Python3 for JSON formatting"
+    echo "🔧 Using Python3 for JSON validation and formatting"
     python3 -c "
 import json
-with open('$TEMP_JSON_FILE', 'r') as f:
-    data = json.load(f)
-compact_json = json.dumps(data, separators=(',', ':'))
-with open('performance-metrics.jsonl', 'a') as f:
-    f.write(compact_json + '\n')
-print(f'✅ Added compact JSON entry ({len(compact_json)} characters)')
+import sys
+try:
+    # Parse the JSON to validate it
+    data = json.loads('$JSON_STRING')
+    # Write as compact JSON
+    compact_json = json.dumps(data, separators=(',', ':'))
+    with open('performance-metrics.jsonl', 'a') as f:
+        f.write(compact_json + '\n')
+    print(f'✅ Added validated compact JSON entry ({len(compact_json)} characters)')
+except json.JSONDecodeError as e:
+    print(f'❌ JSON validation failed: {e}')
+    print('Raw JSON string preview: $JSON_STRING'[:100] + '...')
+    sys.exit(1)
 "
 elif command -v python >/dev/null 2>&1; then
-    echo "🔧 Using Python for JSON formatting"
+    echo "🔧 Using Python for JSON validation and formatting"
     python -c "
 import json
-with open('$TEMP_JSON_FILE', 'r') as f:
-    data = json.load(f)
-compact_json = json.dumps(data, separators=(',', ':'))
-with open('performance-metrics.jsonl', 'a') as f:
-    f.write(compact_json + '\n')
-print('✅ Added compact JSON entry')
+import sys
+try:
+    data = json.loads('$JSON_STRING')
+    compact_json = json.dumps(data, separators=(',', ':'))
+    with open('performance-metrics.jsonl', 'a') as f:
+        f.write(compact_json + '\n')
+    print('✅ Added validated compact JSON entry')
+except:
+    print('❌ JSON validation failed')
+    sys.exit(1)
 "
-elif command -v jq >/dev/null 2>&1; then
-    echo "🔧 Using jq for JSON formatting"
-    # Force compact output and ensure it's a single line
-    jq -c -M '.' "$TEMP_JSON_FILE" | tr -d '\n\r' >> performance-metrics.jsonl
-    echo "" >> performance-metrics.jsonl
 else
-    echo "❌ Error: No JSON processor available (Python or jq required)"
-    exit 1
+    # Fallback: write directly but with validation
+    echo "🔧 No Python available, writing JSON directly"
+    echo "$JSON_STRING" >> performance-metrics.jsonl
 fi
 
 # Debug: Check what was actually written
@@ -213,10 +189,7 @@ else
 fi
 
 # Also create individual tool metric file for debugging
-cp "$TEMP_JSON_FILE" "metrics/${TOOL_NAME,,}-metrics.json"
-
-# Clean up temp file
-rm -f "$TEMP_JSON_FILE"
+echo "$JSON_STRING" > "metrics/${TOOL_NAME,,}-metrics.json"
 
 # Ensure the file has proper permissions and no BOM
 if command -v dos2unix >/dev/null 2>&1; then
