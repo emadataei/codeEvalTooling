@@ -20,7 +20,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install azure-ai-inference azure-identity PyGithub sonarqube-api pylint black isort
+          pip install azure-ai-inference azure-identity PyGithub sonarqube-api pylint
 
       - name: Run Static Analysis
         run: |
@@ -37,21 +37,6 @@ jobs:
           python scripts/analyze_pr.py \
             --pr-number ${{ github.event.pull_request.number }} \
             --repo ${{ github.repository }}
-
-      - name: Auto-fix Simple Issues
-        run: |
-          # Auto-format and fix lint issues
-          black src/
-          isort src/
-          
-          # Commit fixes if any
-          if [[ -n $(git status --porcelain) ]]; then
-            git config --local user.email "action@github.com"
-            git config --local user.name "GitHub Action"
-            git add .
-            git commit -m "🤖 Auto-fix: Formatting and import sorting"
-            git push
-          fi
 
       - name: Update PR Labels and Assignees
         env:
@@ -78,7 +63,7 @@ jobs:
               | Impact Surface | ${score.impact_score}/30 | Files affected, blast radius |
               | AI Assessment | ${score.ai_score}/30 | Comprehension difficulty |
               
-              **AI Provider:** ${score.ai_provider || 'azure'}
+              **AI Provider:** ${score.ai_provider || 'ai_foundry'}
               **Reasoning:** ${score.reasoning}
               
               **Review Assignment:** ${score.tier === 0 ? 'Auto-merge on CI green' : 
