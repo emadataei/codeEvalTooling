@@ -126,11 +126,8 @@ echo "⚡ Performance ratio: $PERFORMANCE_RATIO s/LOC"
 # Create metrics directory if it doesn't exist
 mkdir -p metrics
 
-# Create the JSON entry - using proper JSON formatting with security findings
-JSON_ENTRY=$(cat << EOF
-{"tool": "$TOOL_NAME", "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)", "duration_seconds": $DURATION, "security_findings": {"total_vulnerabilities": $VULNERABILITIES_TOTAL, "high_severity": $VULNERABILITIES_HIGH, "medium_severity": $VULNERABILITIES_MEDIUM, "low_severity": $VULNERABILITIES_LOW, "top_issues": "$ISSUES_FOUND"}, "lines_of_code": {"total": $LOC_TOTAL, "python": $LOC_PYTHON, "javascript": $LOC_JS, "typescript": $LOC_TS}, "files_analyzed": {"total": $FILES_TOTAL, "python": $FILES_PYTHON, "javascript": $FILES_JS, "typescript": $FILES_TS}, "repository_size_kb": $REPO_SIZE, "commit_sha": "${GITHUB_SHA:-unknown}", "branch": "${GITHUB_REF_NAME:-unknown}", "workflow_run_id": "${GITHUB_RUN_ID:-unknown}", "performance_ratio": $PERFORMANCE_RATIO}
-EOF
-)
+# Create the JSON entry - using proper JSON formatting with security findings on a single line
+JSON_ENTRY="{\"tool\": \"$TOOL_NAME\", \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"duration_seconds\": $DURATION, \"security_findings\": {\"total_vulnerabilities\": $VULNERABILITIES_TOTAL, \"high_severity\": $VULNERABILITIES_HIGH, \"medium_severity\": $VULNERABILITIES_MEDIUM, \"low_severity\": $VULNERABILITIES_LOW, \"top_issues\": \"$ISSUES_FOUND\"}, \"lines_of_code\": {\"total\": $LOC_TOTAL, \"python\": $LOC_PYTHON, \"javascript\": $LOC_JS, \"typescript\": $LOC_TS}, \"files_analyzed\": {\"total\": $FILES_TOTAL, \"python\": $FILES_PYTHON, \"javascript\": $FILES_JS, \"typescript\": $FILES_TS}, \"repository_size_kb\": $REPO_SIZE, \"commit_sha\": \"${GITHUB_SHA:-unknown}\", \"branch\": \"${GITHUB_REF_NAME:-unknown}\", \"workflow_run_id\": \"${GITHUB_RUN_ID:-unknown}\", \"performance_ratio\": $PERFORMANCE_RATIO}"
 
 # Log to structured JSON format
 echo "$JSON_ENTRY" >> performance-metrics.jsonl
@@ -143,20 +140,7 @@ fi
 echo "💾 Metrics saved to performance-metrics.jsonl"
 
 # Also create individual tool metric file for debugging
-echo "$JSON_ENTRY" | jq '.' > "metrics/${TOOL_NAME,,}-metrics.json" 2>/dev/null || {
-    # Fallback if jq is not available
-    cat > "metrics/${TOOL_NAME,,}-metrics.json" << EOF
-{
-  "tool": "$TOOL_NAME",
-  "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "duration_seconds": $DURATION,
-  "lines_of_code": $LOC_TOTAL,
-  "files_analyzed": $FILES_TOTAL,
-  "repository_size_kb": $REPO_SIZE,
-  "performance_ratio": $PERFORMANCE_RATIO
-}
-EOF
-}
+echo "$JSON_ENTRY" > "metrics/${TOOL_NAME,,}-metrics.json"
 
 echo "✅ Metrics collected for $TOOL_NAME:"
 echo "   📊 Duration: ${DURATION}s"
