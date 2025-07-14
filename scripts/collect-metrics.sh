@@ -126,11 +126,54 @@ echo "⚡ Performance ratio: $PERFORMANCE_RATIO s/LOC"
 # Create metrics directory if it doesn't exist
 mkdir -p metrics
 
-# Create the JSON entry - using proper JSON formatting with security findings on a single line
-JSON_ENTRY="{\"tool\": \"$TOOL_NAME\", \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"duration_seconds\": $DURATION, \"security_findings\": {\"total_vulnerabilities\": $VULNERABILITIES_TOTAL, \"high_severity\": $VULNERABILITIES_HIGH, \"medium_severity\": $VULNERABILITIES_MEDIUM, \"low_severity\": $VULNERABILITIES_LOW, \"top_issues\": \"$ISSUES_FOUND\"}, \"lines_of_code\": {\"total\": $LOC_TOTAL, \"python\": $LOC_PYTHON, \"javascript\": $LOC_JS, \"typescript\": $LOC_TS}, \"files_analyzed\": {\"total\": $FILES_TOTAL, \"python\": $FILES_PYTHON, \"javascript\": $FILES_JS, \"typescript\": $FILES_TS}, \"repository_size_kb\": $REPO_SIZE, \"commit_sha\": \"${GITHUB_SHA:-unknown}\", \"branch\": \"${GITHUB_REF_NAME:-unknown}\", \"workflow_run_id\": \"${GITHUB_RUN_ID:-unknown}\", \"performance_ratio\": $PERFORMANCE_RATIO}"
+# Create the JSON entry using a temporary file to avoid shell variable length limits
+TEMP_JSON_FILE=$(mktemp)
+cat > "$TEMP_JSON_FILE" << JSONEOF
+{
+  "tool": "$TOOL_NAME",
+  "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "duration_seconds": $DURATION,
+  "security_findings": {
+    "total_vulnerabilities": $VULNERABILITIES_TOTAL,
+    "high_severity": $VULNERABILITIES_HIGH,
+    "medium_severity": $VULNERABILITIES_MEDIUM,
+    "low_severity": $VULNERABILITIES_LOW,
+    "top_issues": "$ISSUES_FOUND"
+  },
+  "lines_of_code": {
+    "total": $LOC_TOTAL,
+    "python": $LOC_PYTHON,
+    "javascript": $LOC_JS,
+    "typescript": $LOC_TS
+  },
+  "files_analyzed": {
+    "total": $FILES_TOTAL,
+    "python": $FILES_PYTHON,
+    "javascript": $FILES_JS,
+    "typescript": $FILES_TS
+  },
+  "repository_size_kb": $REPO_SIZE,
+  "commit_sha": "${GITHUB_SHA:-unknown}",
+  "branch": "${GITHUB_REF_NAME:-unknown}",
+  "workflow_run_id": "${GITHUB_RUN_ID:-unknown}",
+  "performance_ratio": $PERFORMANCE_RATIO
+}
+JSONEOF
 
-# Log to structured JSON format
-echo "$JSON_ENTRY" >> performance-metrics.jsonl
+# Convert to single line JSON and append to metrics file
+if command -v jq >/dev/null 2>&1; then
+    jq -c '.' "$TEMP_JSON_FILE" >> performance-metrics.jsonl
+else
+    # Fallback: manually create compact JSON if jq is not available
+    tr -d '\n' < "$TEMP_JSON_FILE" | sed 's/  */ /g' >> performance-metrics.jsonl
+    echo "" >> performance-metrics.jsonl
+fi
+
+# Also create individual tool metric file for debugging
+cp "$TEMP_JSON_FILE" "metrics/${TOOL_NAME,,}-metrics.json"
+
+# Clean up temp file
+rm -f "$TEMP_JSON_FILE"
 
 # Ensure the file has proper permissions and no BOM
 if command -v dos2unix >/dev/null 2>&1; then
@@ -138,9 +181,6 @@ if command -v dos2unix >/dev/null 2>&1; then
 fi
 
 echo "💾 Metrics saved to performance-metrics.jsonl"
-
-# Also create individual tool metric file for debugging
-echo "$JSON_ENTRY" > "metrics/${TOOL_NAME,,}-metrics.json"
 
 echo "✅ Metrics collected for $TOOL_NAME:"
 echo "   📊 Duration: ${DURATION}s"
