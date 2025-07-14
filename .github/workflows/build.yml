@@ -150,6 +150,7 @@ jobs:
           path: |
             performance-metrics.jsonl
             metrics/semgrep-metrics.json
+            semgrep-results.json
         if: always()
 
   snyk:
@@ -260,6 +261,7 @@ jobs:
           path: |
             performance-metrics.jsonl
             metrics/snyk-metrics.json
+            snyk-code-results.json
         if: always()
       
       - name: Upload Snyk results
@@ -347,16 +349,46 @@ jobs:
       
       - name: Add report to job summary
         run: |
-          echo "## 🔒 Security Analysis Performance Report" >> $GITHUB_STEP_SUMMARY
+          echo "## 🔒 Security Analysis Report" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           if [ -f performance-metrics.jsonl ]; then
-            echo "### 📊 Analysis Results" >> $GITHUB_STEP_SUMMARY
+            echo "### 🔒 Security Findings" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Tool | Vulnerabilities | High | Medium | Low |" >> $GITHUB_STEP_SUMMARY
+            echo "|------|----------------|------|--------|-----|" >> $GITHUB_STEP_SUMMARY
+            
+            # Parse security findings from JSON
+            while IFS= read -r line; do
+              if [ -n "$line" ]; then
+                tool=$(echo "$line" | grep -o '"tool":"[^"]*"' | cut -d'"' -f4)
+                total_vulns=$(echo "$line" | grep -o '"total_vulnerabilities":[^,}]*' | cut -d':' -f2 | tr -d '"' || echo "N/A")
+                high_vulns=$(echo "$line" | grep -o '"high_severity":[^,}]*' | cut -d':' -f2 | tr -d '"' || echo "N/A")
+                med_vulns=$(echo "$line" | grep -o '"medium_severity":[^,}]*' | cut -d':' -f2 | tr -d '"' || echo "N/A")
+                low_vulns=$(echo "$line" | grep -o '"low_severity":[^,}]*' | cut -d':' -f2 | tr -d '"' || echo "N/A")
+                
+                if [ -n "$tool" ]; then
+                  # Handle special values
+                  if [ "$total_vulns" = "github_stored" ]; then
+                    total_vulns="[GitHub Security](../../security/code-scanning)"
+                    high_vulns="-"; med_vulns="-"; low_vulns="-"
+                  elif [ "$total_vulns" = "sonarcloud_stored" ]; then
+                    total_vulns="[SonarCloud](https://sonarcloud.io)"
+                    high_vulns="-"; med_vulns="-"; low_vulns="-"
+                  fi
+                  
+                  echo "| $tool | $total_vulns | $high_vulns | $med_vulns | $low_vulns |" >> $GITHUB_STEP_SUMMARY
+                fi
+              fi
+            done < performance-metrics.jsonl
+            
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### ⚡ Performance Summary" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "| Tool | Duration | Status |" >> $GITHUB_STEP_SUMMARY
             echo "|------|----------|--------|" >> $GITHUB_STEP_SUMMARY
             
-            # Simple parsing without complex Python
+            # Simple parsing for performance
             while IFS= read -r line; do
               if [ -n "$line" ]; then
                 tool=$(echo "$line" | grep -o '"tool":"[^"]*"' | cut -d'"' -f4)
@@ -376,11 +408,11 @@ jobs:
             
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### 📍 Access Options" >> $GITHUB_STEP_SUMMARY
-            echo "- Download 'performance-metrics-report' artifact for full HTML report" >> $GITHUB_STEP_SUMMARY
-            echo "- Check repository Security tab for detailed findings" >> $GITHUB_STEP_SUMMARY
+            echo "- Download 'performance-metrics-report' artifact for full HTML report with interactive tabs" >> $GITHUB_STEP_SUMMARY
+            echo "- Check repository Security tab for detailed CodeQL findings" >> $GITHUB_STEP_SUMMARY
             echo "- View at: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/reports/${{ github.run_number }}/performance-report.html" >> $GITHUB_STEP_SUMMARY
           else
-            echo "⚠️ No performance metrics found. Check individual job logs for issues." >> $GITHUB_STEP_SUMMARY
+            echo "⚠️ No metrics found. Check individual job logs for issues." >> $GITHUB_STEP_SUMMARY
           fi
       
       - name: Show generated files

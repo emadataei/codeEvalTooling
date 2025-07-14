@@ -22,12 +22,12 @@ def load_metrics():
     return metrics
 
 def generate_markdown_report(metrics):
-    """Generate markdown report"""
+    """Generate markdown report with security findings"""
     
     if not metrics:
-        return """# 🔒 Security Analysis Performance Report
+        return """# 🔒 Security Analysis Report
 
-⚠️ No performance metrics collected. Check workflow logs for issues.
+⚠️ No metrics collected. Check workflow logs for issues.
 
 ## Next Steps
 1. Verify security analysis tools are configured with proper tokens
@@ -38,13 +38,56 @@ def generate_markdown_report(metrics):
     total_tools = len({m['tool'] for m in metrics})
     total_duration = sum(m['duration_seconds'] for m in metrics)
     
-    report = f"""# 🔒 Security Analysis Performance Report
+    # Calculate total vulnerabilities
+    total_vulnerabilities = 0
+    for metric in metrics:
+        findings = metric.get('security_findings', {})
+        if isinstance(findings.get('total_vulnerabilities'), int):
+            total_vulnerabilities += findings['total_vulnerabilities']
+    
+    report = f"""# 🔒 Security Analysis Report
 
 **Generated**: {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}  
 **Tools Analyzed**: {total_tools}  
-**Total Analysis Time**: {total_duration}s
+**Total Analysis Time**: {total_duration}s  
+**Total Vulnerabilities Found**: {total_vulnerabilities}
 
-## 📊 Performance Overview
+## � Security Findings
+
+| Tool | Total Issues | High | Medium | Low | Top Issues |
+|------|-------------|------|--------|-----|------------|
+"""
+
+    # Add security findings rows
+    for metric in metrics:
+        findings = metric.get('security_findings', {})
+        total_vulns = findings.get('total_vulnerabilities', 'N/A')
+        high_vulns = findings.get('high_severity', 'N/A')
+        med_vulns = findings.get('medium_severity', 'N/A')
+        low_vulns = findings.get('low_severity', 'N/A')
+        top_issues = findings.get('top_issues', 'None detected')
+        
+        # Handle special values
+        if total_vulns == 'github_stored':
+            total_vulns = '[View in Security Tab](../../security/code-scanning)'
+            high_vulns = med_vulns = low_vulns = '-'
+            top_issues = 'Results in GitHub Security tab'
+        elif total_vulns == 'sonarcloud_stored':
+            total_vulns = '[View in SonarCloud](https://sonarcloud.io)'
+            high_vulns = med_vulns = low_vulns = '-'
+            top_issues = 'Results in SonarCloud'
+        
+        # Truncate top issues for markdown table
+        if len(top_issues) > 50:
+            top_issues = top_issues[:50] + '...'
+        
+        # Replace semicolons with commas for better markdown display
+        top_issues = top_issues.replace(';', ', ')
+        
+        report += f"| {metric['tool']} | {total_vulns} | {high_vulns} | {med_vulns} | {low_vulns} | {top_issues} |\n"
+
+    report += f"""
+## ⚡ Performance Overview
 
 | Tool | Duration | Lines of Code | Performance Ratio | Status |
 |------|----------|---------------|-------------------|--------|

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script to collect performance metrics for security analysis tools
+# Script to collect performance and security metrics for security analysis tools
 TOOL_NAME=$1
 START_TIME=$2
 
@@ -16,6 +16,77 @@ END_TIME=$(date +%s)
 DURATION=$((END_TIME - START_TIME))
 
 echo "📊 Analysis duration: ${DURATION} seconds"
+
+# Initialize security findings variables
+VULNERABILITIES_HIGH=0
+VULNERABILITIES_MEDIUM=0
+VULNERABILITIES_LOW=0
+VULNERABILITIES_TOTAL=0
+ISSUES_FOUND=""
+
+# Tool-specific security findings extraction
+case "$TOOL_NAME" in
+    "Semgrep")
+        if [ -f "semgrep-results.json" ]; then
+            echo "📄 Parsing Semgrep results..."
+            if command -v jq >/dev/null 2>&1; then
+                VULNERABILITIES_HIGH=$(jq '[.results[] | select(.extra.severity == "ERROR")] | length' semgrep-results.json 2>/dev/null || echo 0)
+                VULNERABILITIES_MEDIUM=$(jq '[.results[] | select(.extra.severity == "WARNING")] | length' semgrep-results.json 2>/dev/null || echo 0)
+                VULNERABILITIES_LOW=$(jq '[.results[] | select(.extra.severity == "INFO")] | length' semgrep-results.json 2>/dev/null || echo 0)
+                VULNERABILITIES_TOTAL=$(jq '.results | length' semgrep-results.json 2>/dev/null || echo 0)
+                
+                # Get top 5 most critical issues
+                ISSUES_FOUND=$(jq -r '.results[:5] | .[] | "\(.extra.metadata.category // "unknown"):\(.check_id)"' semgrep-results.json 2>/dev/null | tr '\n' ';' || echo "")
+            else
+                # Fallback without jq
+                VULNERABILITIES_TOTAL=$(grep -c '"check_id"' semgrep-results.json 2>/dev/null || echo 0)
+            fi
+        fi
+        ;;
+    "Snyk")
+        # Parse Snyk JSON results
+        if [ -f "snyk-code-results.json" ]; then
+            echo "📄 Parsing Snyk results..."
+            if command -v jq >/dev/null 2>&1; then
+                VULNERABILITIES_HIGH=$(jq '[.runs[]?.results[]? | select(.level == "error")] | length' snyk-code-results.json 2>/dev/null || echo 0)
+                VULNERABILITIES_MEDIUM=$(jq '[.runs[]?.results[]? | select(.level == "warning")] | length' snyk-code-results.json 2>/dev/null || echo 0)
+                VULNERABILITIES_LOW=$(jq '[.runs[]?.results[]? | select(.level == "note")] | length' snyk-code-results.json 2>/dev/null || echo 0)
+                VULNERABILITIES_TOTAL=$(jq '[.runs[]?.results[]?] | length' snyk-code-results.json 2>/dev/null || echo 0)
+                
+                # Get top 5 most critical issues
+                ISSUES_FOUND=$(jq -r '.runs[]?.results[]? | select(.level == "error") | "\(.ruleId // "unknown"):\(.message.text // "No description")"' snyk-code-results.json 2>/dev/null | head -5 | tr '\n' ';' || echo "")
+            else
+                # Fallback without jq
+                VULNERABILITIES_TOTAL=$(grep -c '"ruleId"' snyk-code-results.json 2>/dev/null || echo 0)
+            fi
+        fi
+        ;;
+    "CodeQL-"*)
+        # CodeQL results are usually in GitHub's database, but we can check for local SARIF
+        if [ -f "results.sarif" ]; then
+            echo "📄 Parsing CodeQL SARIF results..."
+            if command -v jq >/dev/null 2>&1; then
+                VULNERABILITIES_HIGH=$(jq '[.runs[]?.results[]? | select(.level == "error")] | length' results.sarif 2>/dev/null || echo 0)
+                VULNERABILITIES_MEDIUM=$(jq '[.runs[]?.results[]? | select(.level == "warning")] | length' results.sarif 2>/dev/null || echo 0)
+                VULNERABILITIES_LOW=$(jq '[.runs[]?.results[]? | select(.level == "note")] | length' results.sarif 2>/dev/null || echo 0)
+                VULNERABILITIES_TOTAL=$(jq '[.runs[]?.results[]?] | length' results.sarif 2>/dev/null || echo 0)
+                
+                # Get top 5 most critical issues
+                ISSUES_FOUND=$(jq -r '.runs[]?.results[]? | "\(.ruleId // "unknown"):\(.message.text // "No description")"' results.sarif 2>/dev/null | head -5 | tr '\n' ';' || echo "")
+            fi
+        else
+            echo "📄 CodeQL results stored in GitHub Security tab"
+            # We'll get this from GitHub API if available
+            VULNERABILITIES_TOTAL="github_stored"
+        fi
+        ;;
+    "SonarQube")
+        # SonarQube results are in SonarCloud, we can try to get metrics from quality gate
+        echo "📄 SonarQube results stored in SonarCloud"
+        # We could potentially use SonarQube API here
+        VULNERABILITIES_TOTAL="sonarcloud_stored"
+        ;;
+esac
 
 # Count lines of code for different languages
 echo "📝 Counting lines of code..."
@@ -55,9 +126,9 @@ echo "⚡ Performance ratio: $PERFORMANCE_RATIO s/LOC"
 # Create metrics directory if it doesn't exist
 mkdir -p metrics
 
-# Create the JSON entry - using proper JSON formatting
+# Create the JSON entry - using proper JSON formatting with security findings
 JSON_ENTRY=$(cat << EOF
-{"tool": "$TOOL_NAME", "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)", "duration_seconds": $DURATION, "lines_of_code": {"total": $LOC_TOTAL, "python": $LOC_PYTHON, "javascript": $LOC_JS, "typescript": $LOC_TS}, "files_analyzed": {"total": $FILES_TOTAL, "python": $FILES_PYTHON, "javascript": $FILES_JS, "typescript": $FILES_TS}, "repository_size_kb": $REPO_SIZE, "commit_sha": "${GITHUB_SHA:-unknown}", "branch": "${GITHUB_REF_NAME:-unknown}", "workflow_run_id": "${GITHUB_RUN_ID:-unknown}", "performance_ratio": $PERFORMANCE_RATIO}
+{"tool": "$TOOL_NAME", "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)", "duration_seconds": $DURATION, "security_findings": {"total_vulnerabilities": $VULNERABILITIES_TOTAL, "high_severity": $VULNERABILITIES_HIGH, "medium_severity": $VULNERABILITIES_MEDIUM, "low_severity": $VULNERABILITIES_LOW, "top_issues": "$ISSUES_FOUND"}, "lines_of_code": {"total": $LOC_TOTAL, "python": $LOC_PYTHON, "javascript": $LOC_JS, "typescript": $LOC_TS}, "files_analyzed": {"total": $FILES_TOTAL, "python": $FILES_PYTHON, "javascript": $FILES_JS, "typescript": $FILES_TS}, "repository_size_kb": $REPO_SIZE, "commit_sha": "${GITHUB_SHA:-unknown}", "branch": "${GITHUB_REF_NAME:-unknown}", "workflow_run_id": "${GITHUB_RUN_ID:-unknown}", "performance_ratio": $PERFORMANCE_RATIO}
 EOF
 )
 
@@ -84,7 +155,8 @@ EOF
 
 echo "✅ Metrics collected for $TOOL_NAME:"
 echo "   📊 Duration: ${DURATION}s"
-echo "   📝 Lines of Code: ${LOC_TOTAL}"
+echo "   � Security Findings: ${VULNERABILITIES_TOTAL} total (High:${VULNERABILITIES_HIGH}, Med:${VULNERABILITIES_MEDIUM}, Low:${VULNERABILITIES_LOW})"
+echo "   �📝 Lines of Code: ${LOC_TOTAL}"
 echo "   📂 Files: ${FILES_TOTAL}"
 echo "   ⚡ Performance Ratio: ${PERFORMANCE_RATIO} s/LOC"
 echo "   💾 Repository Size: ${REPO_SIZE} KB"
