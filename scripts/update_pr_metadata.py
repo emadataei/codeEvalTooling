@@ -63,18 +63,18 @@ def main():
     # Update labels based on tier
     try:
         update_pr_labels(pr, tier, total_score)
-        print(f"✅ Updated PR labels for tier {tier}")
+        print(f"Updated PR labels for tier {tier}")
     except Exception as e:
         print(f"Warning: Could not update labels: {e}")
     
     # Update assignees/reviewers based on tier
     try:
         update_pr_reviewers(pr, tier)
-        print(f"✅ Updated PR reviewers for tier {tier}")
+        print(f"Updated PR reviewers for tier {tier}")
     except Exception as e:
         print(f"Warning: Could not update reviewers: {e}")
     
-    print(f"✅ PR metadata updated successfully for cognitive complexity tier {tier}")
+    print(f"PR metadata updated successfully for cognitive complexity tier {tier}")
 
 
 def update_pr_labels(pr, tier: int, total_score: int):

@@ -1,10 +1,10 @@
-# 🧠 Cognitive Score Calculation for PR Tiers
+# Cognitive Score Calculation for PR Tiers
 
 ## Overview
 
 Cognitive score determines the mental effort required to understand and safely approve a code change. This score automatically assigns PR tiers based on complexity, impact, and comprehension difficulty.
 
-## 📊 Scoring Components
+## Scoring Components
 
 ### 1. Static Code Analysis Score (0-40 points)
 - **Cyclomatic Complexity**: McCabe complexity per function
@@ -25,7 +25,7 @@ Cognitive score determines the mental effort required to understand and safely a
 - **Logic Density**: Complex business rules vs simple CRUD
 - **Novel Implementations**: New algorithms or approaches
 
-## 🎯 Tier Assignment
+## Tier Assignment
 
 | Cognitive Score | Tier | Auto-Actions |
 |----------------|------|--------------|
@@ -58,7 +58,7 @@ ai_analysis:
 5. **Generate score** → Weighted sum of all components
 6. **Auto-tag PR** → Apply tier labels and assign reviewers
 
-## 📋 Example Scoring
+## Example Scoring
 
 ```javascript
 // Example: Simple utility function
@@ -93,7 +93,7 @@ async function calculateDynamicPricing(user, product, marketConditions) {
 - Impact: Pricing logic affects revenue (22)
 - AI: Business-critical algorithm (25)
 
-## 🔧 Integration Points
+## Integration Points
 
 - **GitHub Actions**: Auto-scoring on PR creation
 - **SonarQube**: Static analysis integration
@@ -101,7 +101,7 @@ async function calculateDynamicPricing(user, product, marketConditions) {
 - **PR Templates**: Manual complexity hints from developers
 - **Slack/Teams**: Notification routing based on tiers
 
-## 📈 Continuous Improvement
+## Continuous Improvement
 
 - **Feedback Loop**: Track review time vs predicted complexity
 - **Model Tuning**: Adjust weights based on actual review outcomes

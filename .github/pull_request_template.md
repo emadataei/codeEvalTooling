@@ -1,6 +1,6 @@
 # 🚀 Pull Request Template
 
-## 🧠 Summary
+## Summary
 
 _What does this change do? Why was it needed? If AI-generated, include the prompt or tool used._
 
@@ -8,7 +8,7 @@ _What does this change do? Why was it needed? If AI-generated, include the promp
 
 ---
 
-## 🧪 Test Plan
+## Test Plan
 
 _How did you test this? Are there new or updated tests?_
 
@@ -28,7 +28,7 @@ _If AI-generated, summarize the process briefly:_
 
 ---
 
-## 📊 Review Tier Suggestion
+## Review Tier Suggestion
 
 > _Based on the rubric in `REVIEW_GUIDELINES.md`_
 
@@ -48,4 +48,3 @@ _If AI-generated, summarize the process briefly:_
 
 ---
 
-🙏 Thank you for helping us scale high-quality development in the AI era.

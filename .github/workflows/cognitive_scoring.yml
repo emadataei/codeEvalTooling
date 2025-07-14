@@ -59,7 +59,7 @@ jobs:
             if (fs.existsSync('cognitive_score.json')) {
               const score = JSON.parse(fs.readFileSync('cognitive_score.json'));
               
-              const comment = `## 🧠 Cognitive Complexity Analysis
+              const comment = `## Cognitive Complexity Analysis
               
               **Total Score: ${score.total_score}/100** → **Tier ${score.tier}**
               

@@ -5,17 +5,17 @@ TOOL_NAME=$1
 START_TIME=$2
 
 if [ -z "$TOOL_NAME" ] || [ -z "$START_TIME" ]; then
-    echo "❌ Usage: $0 <tool_name> <start_time>"
+    echo "ERROR: Usage: $0 <tool_name> <start_time>"
     exit 1
 fi
 
-echo "🔄 Collecting metrics for $TOOL_NAME..."
+echo "Collecting metrics for $TOOL_NAME..."
 
 # Calculate metrics
 END_TIME=$(date +%s)
 DURATION=$((END_TIME - START_TIME))
 
-echo "📊 Analysis duration: ${DURATION} seconds"
+echo "Analysis duration: ${DURATION} seconds"
 
 # Initialize security findings variables
 VULNERABILITIES_HIGH=0
@@ -89,7 +89,7 @@ case "$TOOL_NAME" in
 esac
 
 # Count lines of code for different languages
-echo "📝 Counting lines of code..."
+echo "Counting lines of code..."
 LOC_PYTHON=$(find . -name "*.py" -not -path "./.git/*" -not -path "./venv/*" -not -path "./.venv/*" -not -path "./node_modules/*" -exec wc -l {} + 2>/dev/null | tail -1 | awk '{print $1}' || echo 0)
 LOC_JS=$(find . -name "*.js" -o -name "*.jsx" -not -path "./.git/*" -not -path "./node_modules/*" -exec wc -l {} + 2>/dev/null | tail -1 | awk '{print $1}' || echo 0)
 LOC_TS=$(find . -name "*.ts" -o -name "*.tsx" -not -path "./.git/*" -not -path "./node_modules/*" -exec wc -l {} + 2>/dev/null | tail -1 | awk '{print $1}' || echo 0)
@@ -121,7 +121,7 @@ else
     LOC_TOTAL=1  # Avoid division by zero in reports
 fi
 
-echo "⚡ Performance ratio: $PERFORMANCE_RATIO s/LOC"
+echo "Performance ratio: $PERFORMANCE_RATIO s/LOC"
 
 # Create metrics directory if it doesn't exist
 mkdir -p metrics
@@ -132,7 +132,7 @@ JSON_STRING="{\"tool\":\"$TOOL_NAME\",\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:
 
 # Validate and write the JSON
 if command -v python3 >/dev/null 2>&1; then
-    echo "🔧 Using Python3 for JSON validation and formatting"
+    echo "Using Python3 for JSON validation and formatting"
     python3 -c "
 import json
 import sys
@@ -143,14 +143,14 @@ try:
     compact_json = json.dumps(data, separators=(',', ':'))
     with open('performance-metrics.jsonl', 'a') as f:
         f.write(compact_json + '\n')
-    print(f'✅ Added validated compact JSON entry ({len(compact_json)} characters)')
+    print(f'Added validated compact JSON entry ({len(compact_json)} characters)')
 except json.JSONDecodeError as e:
-    print(f'❌ JSON validation failed: {e}')
+    print(f'JSON validation failed: {e}')
     print('Raw JSON string preview: $JSON_STRING'[:100] + '...')
     sys.exit(1)
 "
 elif command -v python >/dev/null 2>&1; then
-    echo "🔧 Using Python for JSON validation and formatting"
+    echo "Using Python for JSON validation and formatting"
     python -c "
 import json
 import sys
@@ -159,19 +159,19 @@ try:
     compact_json = json.dumps(data, separators=(',', ':'))
     with open('performance-metrics.jsonl', 'a') as f:
         f.write(compact_json + '\n')
-    print('✅ Added validated compact JSON entry')
+    print('Added validated compact JSON entry')
 except:
-    print('❌ JSON validation failed')
+    print('JSON validation failed')
     sys.exit(1)
 "
 else
     # Fallback: write directly but with validation
-    echo "🔧 No Python available, writing JSON directly"
+    echo "No Python available, writing JSON directly"
     echo "$JSON_STRING" >> performance-metrics.jsonl
 fi
 
 # Debug: Check what was actually written
-echo "🔍 Verifying JSONL format..."
+echo "Verifying JSONL format..."
 if [ -f performance-metrics.jsonl ]; then
     LAST_LINE=$(tail -1 performance-metrics.jsonl)
     echo "   Last entry length: ${#LAST_LINE} characters"
@@ -180,12 +180,12 @@ if [ -f performance-metrics.jsonl ]; then
     # Count lines in the last JSON object (should be 1)
     NEWLINE_COUNT=$(echo "$LAST_LINE" | grep -o $'\n' | wc -l)
     if [ "$NEWLINE_COUNT" -eq 0 ]; then
-        echo "   ✅ Single-line JSON confirmed"
+        echo "   Single-line JSON confirmed"
     else
-        echo "   ❌ Warning: Multi-line JSON detected ($NEWLINE_COUNT newlines)"
+        echo "   WARNING: Multi-line JSON detected ($NEWLINE_COUNT newlines)"
     fi
 else
-    echo "   ❌ Warning: performance-metrics.jsonl not found"
+    echo "   WARNING: performance-metrics.jsonl not found"
 fi
 
 # Also create individual tool metric file for debugging
@@ -198,26 +198,26 @@ fi
 
 echo "💾 Metrics saved to performance-metrics.jsonl"
 
-echo "✅ Metrics collected for $TOOL_NAME:"
-echo "   📊 Duration: ${DURATION}s"
-echo "   � Security Findings: ${VULNERABILITIES_TOTAL} total (High:${VULNERABILITIES_HIGH}, Med:${VULNERABILITIES_MEDIUM}, Low:${VULNERABILITIES_LOW})"
-echo "   �📝 Lines of Code: ${LOC_TOTAL}"
-echo "   📂 Files: ${FILES_TOTAL}"
-echo "   ⚡ Performance Ratio: ${PERFORMANCE_RATIO} s/LOC"
-echo "   💾 Repository Size: ${REPO_SIZE} KB"
-echo "   📄 Saved to: performance-metrics.jsonl"
+echo "Metrics collected for $TOOL_NAME:"
+echo "   Duration: ${DURATION}s"
+echo "   Security Findings: ${VULNERABILITIES_TOTAL} total (High:${VULNERABILITIES_HIGH}, Med:${VULNERABILITIES_MEDIUM}, Low:${VULNERABILITIES_LOW})"
+echo "   Lines of Code: ${LOC_TOTAL}"
+echo "   Files: ${FILES_TOTAL}"
+echo "   Performance Ratio: ${PERFORMANCE_RATIO} s/LOC"
+echo "   Repository Size: ${REPO_SIZE} KB"
+echo "   Saved to: performance-metrics.jsonl"
 
 # Verify the JSON is valid
 if command -v python3 >/dev/null 2>&1; then
-    echo "🔍 Validating JSON format..."
+    echo "Validating JSON format..."
     if tail -1 performance-metrics.jsonl | python3 -c "import json, sys; json.loads(sys.stdin.read())" 2>/dev/null; then
-        echo "✅ JSON format is valid"
+        echo "JSON format is valid"
     else
-        echo "❌ Warning: JSON format validation failed"
+        echo "WARNING: JSON format validation failed"
         echo "Last JSON entry: $(tail -1 performance-metrics.jsonl | head -c 200)..."
     fi
 else
-    echo "ℹ️  Python3 not available for JSON validation"
+    echo "INFO: Python3 not available for JSON validation"
 fi
 
-echo "🎉 Metrics collection completed for $TOOL_NAME"
+echo "Metrics collection completed for $TOOL_NAME"
