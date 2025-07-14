@@ -62,17 +62,29 @@ jobs:
           CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
       
       - name: Add Quality Gate Summary to PR
-        if: github.event_name == 'pull_request'
+        if: always()
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
+            
+            // Get PR number from different possible locations
+            const prNumber = context.issue?.number || 
+                           context.payload?.pull_request?.number || 
+                           context.payload?.number;
+            
+            // Check if this is a PR context
+            if (!prNumber) {
+              console.log('No PR number found, skipping comment');
+              return;
+            }
             
             let results = { passed: false, score: 0, summary: 'Failed to load results' };
             try {
               results = JSON.parse(fs.readFileSync('quality-gate-results.json', 'utf8'));
             } catch (error) {
               console.log('Could not read quality gate results:', error);
+              return;
             }
             
             const passed = results.passed;
@@ -122,7 +134,7 @@ jobs:
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.issue.number,
+              issue_number: prNumber,
             });
             
             const existingComment = comments.find(comment => 
@@ -140,7 +152,7 @@ jobs:
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: context.issue.number,
+                issue_number: prNumber,
                 body: comment
               });
             }
