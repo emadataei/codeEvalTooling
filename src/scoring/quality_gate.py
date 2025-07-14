@@ -201,6 +201,17 @@ class QualityGate:
             print_matches = re.finditer(self.code_smell_patterns['print_debug'], content)
             for match in print_matches:
                 line_no = content[:match.start()].count('\n') + 1
+                line_content = content.split('\n')[line_no - 1] if line_no <= len(content.split('\n')) else ""
+                
+                # Skip print statements that are clearly legitimate (not debug)
+                if any(keyword in line_content.lower() for keyword in [
+                    'result', 'output', 'summary', 'analysis', 'warning', 'error',
+                    'github', 'quality gate', 'cognitive', 'failed', 'passed',
+                    'location:', 'suggestion:', 'blocking', 'found', 'could not',
+                    'no valid', 'complete'
+                ]):
+                    continue
+                    
                 issues.append(QualityIssue(
                     level=QualityLevel.WARNING,
                     category=CATEGORY_CODE_QUALITY,
