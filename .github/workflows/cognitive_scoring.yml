@@ -41,6 +41,7 @@ jobs:
       - name: Update PR Labels and Assignees
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           python scripts/update_pr_metadata.py \
             --pr-number ${{ github.event.pull_request.number }}
