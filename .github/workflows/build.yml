@@ -292,14 +292,14 @@ jobs:
           echo "=== Metrics directory ==="
           ls -la metrics/ 2>/dev/null || echo "No metrics directory"
           echo "=== Performance metrics file ==="
-          if [ -f performance-metrics.jsonl ]; then
+          if [ -f performance-metrics.jsonl ] && [ -s performance-metrics.jsonl ]; then
             echo "📄 performance-metrics.jsonl exists, content:"
             cat performance-metrics.jsonl | head -20
             echo "📊 Total lines in metrics file: $(wc -l < performance-metrics.jsonl)"
           else
-            echo "❌ No performance-metrics.jsonl file found"
+            echo "❌ No performance-metrics.jsonl file found or file is empty"
             echo "Creating minimal metrics file for demonstration..."
-            echo "{\"timestamp\":\"$(date -Iseconds)\",\"tool\":\"Demo\",\"duration_seconds\":1,\"status\":\"completed\"}" > performance-metrics.jsonl
+            echo '{"timestamp":"'$(date -Iseconds)'","tool":"Demo","duration_seconds":1,"status":"no_data","security_findings":{"total_vulnerabilities":0,"high_severity":0,"medium_severity":0,"low_severity":0,"top_issues":"No data collected"}}' > performance-metrics.jsonl
           fi
       
       - name: Merge metrics files (if multiple)

@@ -11,7 +11,7 @@ def load_metrics():
     """Load all metrics from JSONL file"""
     metrics = []
     if os.path.exists('performance-metrics.jsonl'):
-        with open('performance-metrics.jsonl', 'r', encoding='utf-8') as f:
+        with open('performance-metrics.jsonl', 'r', encoding='utf-8-sig') as f:
             for line_num, line in enumerate(f, 1):
                 line = line.strip()
                 if line:

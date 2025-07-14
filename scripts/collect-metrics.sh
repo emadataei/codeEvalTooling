@@ -135,6 +135,11 @@ EOF
 # Log to structured JSON format
 echo "$JSON_ENTRY" >> performance-metrics.jsonl
 
+# Ensure the file has proper permissions and no BOM
+if command -v dos2unix >/dev/null 2>&1; then
+    dos2unix performance-metrics.jsonl 2>/dev/null || true
+fi
+
 echo "💾 Metrics saved to performance-metrics.jsonl"
 
 # Also create individual tool metric file for debugging
