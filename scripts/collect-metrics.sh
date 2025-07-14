@@ -162,11 +162,20 @@ JSONEOF
 
 # Convert to single line JSON and append to metrics file
 if command -v jq >/dev/null 2>&1; then
+    # Use jq to create compact JSON
     jq -c '.' "$TEMP_JSON_FILE" >> performance-metrics.jsonl
 else
-    # Fallback: manually create compact JSON if jq is not available
-    tr -d '\n' < "$TEMP_JSON_FILE" | sed 's/  */ /g' >> performance-metrics.jsonl
-    echo "" >> performance-metrics.jsonl
+    # Fallback: use Python if available, otherwise manual approach
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c "import json; import sys; print(json.dumps(json.load(open('$TEMP_JSON_FILE')), separators=(',', ':')))" >> performance-metrics.jsonl
+    elif command -v python >/dev/null 2>&1; then
+        python -c "import json; import sys; print(json.dumps(json.load(open('$TEMP_JSON_FILE')), separators=(',', ':')))" >> performance-metrics.jsonl
+    else
+        # Last resort: manual compaction (not ideal but better than broken JSON)
+        echo "⚠️  No jq or Python available, using manual JSON compaction"
+        # Remove all whitespace and newlines, but preserve string content
+        cat "$TEMP_JSON_FILE" | tr -d '\n\r' | sed 's/[[:space:]]*:[[:space:]]*/:/g' | sed 's/[[:space:]]*,[[:space:]]*/,/g' | sed 's/[[:space:]]*{[[:space:]]*/{/g' | sed 's/[[:space:]]*}[[:space:]]*/}/g' | sed 's/[[:space:]]*\[[[:space:]]*/[/g' | sed 's/[[:space:]]*\][[:space:]]*/]/g' >> performance-metrics.jsonl
+    fi
 fi
 
 # Also create individual tool metric file for debugging
@@ -194,11 +203,11 @@ echo "   📄 Saved to: performance-metrics.jsonl"
 # Verify the JSON is valid
 if command -v python3 >/dev/null 2>&1; then
     echo "🔍 Validating JSON format..."
-    if echo "$JSON_ENTRY" | python3 -m json.tool >/dev/null 2>&1; then
+    if tail -1 performance-metrics.jsonl | python3 -c "import json, sys; json.loads(sys.stdin.read())" 2>/dev/null; then
         echo "✅ JSON format is valid"
     else
         echo "❌ Warning: JSON format validation failed"
-        echo "JSON content: $JSON_ENTRY"
+        echo "Last JSON entry: $(tail -1 performance-metrics.jsonl | head -c 200)..."
     fi
 else
     echo "ℹ️  Python3 not available for JSON validation"
