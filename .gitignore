@@ -5,6 +5,9 @@ node_modules/
 /blob-report/
 /playwright/.cache/
 
+# Environment variables (use .env.example as template)
+.env
+
 # Performance metrics and reports (generated during CI/testing)
 performance-metrics.jsonl
 performance-report.html

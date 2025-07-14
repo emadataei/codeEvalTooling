@@ -135,6 +135,25 @@ Before deploying it, make sure you change at least the values for:
 - `SECRET_KEY`
 - `FIRST_SUPERUSER_PASSWORD`
 - `POSTGRES_PASSWORD`
+- `AZURE_OPENAI_API_KEY` and `AZURE_OPENAI_ENDPOINT` (for AI-powered code analysis)
+
+#### AI Foundry Configuration
+
+This project includes AI-powered cognitive complexity analysis for PRs using Azure AI Foundry. For GitHub Actions, configure these as repository secrets:
+
+**Required GitHub Secrets:**
+- `AI_FOUNDRY_ENDPOINT` = `https://hveai7690491737.services.ai.azure.com/models`
+- `AI_FOUNDRY_MODEL` = `gpt-4o` (optional, defaults to gpt-4o)
+- `AI_FOUNDRY_TOKEN` = your AI Foundry token (optional if using DefaultAzureCredential)
+
+**Setting GitHub Secrets:**
+1. Go to your repository → Settings → Secrets and variables → Actions
+2. Click "New repository secret" for each variable above
+3. The cognitive scoring workflow will automatically use these secrets
+
+📖 **Detailed setup guide:** [AI Provider Setup Guide](./docs/ai_provider_setup.md)
+
+For local development, copy `.env.example` to `.env` and update the values.
 
 You can (and should) pass these as environment variables from secrets.
 

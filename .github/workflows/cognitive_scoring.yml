@@ -1,0 +1,94 @@
+name: Cognitive Scoring & Tier Assignment
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  cognitive-analysis:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install azure-ai-inference azure-identity PyGithub sonarqube-api pylint
+
+      - name: Run Static Analysis
+        run: |
+          # Run linting and complexity analysis
+          pylint --load-plugins=pylint.extensions.mccabe --reports=y src/ || true
+          
+      - name: Analyze PR Cognitive Complexity
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AI_FOUNDRY_ENDPOINT: ${{ secrets.AI_FOUNDRY_ENDPOINT }}
+          AI_FOUNDRY_MODEL: ${{ secrets.AI_FOUNDRY_MODEL }}
+          AI_FOUNDRY_TOKEN: ${{ secrets.AI_FOUNDRY_TOKEN }}
+        run: |
+          python scripts/analyze_pr.py \
+            --pr-number ${{ github.event.pull_request.number }} \
+            --repo ${{ github.repository }}
+
+      - name: Auto-fix Simple Issues
+        run: |
+          # Auto-format and fix lint issues
+          black src/
+          isort src/
+          
+          # Commit fixes if any
+          if [[ -n $(git status --porcelain) ]]; then
+            git config --local user.email "action@github.com"
+            git config --local user.name "GitHub Action"
+            git add .
+            git commit -m "🤖 Auto-fix: Formatting and import sorting"
+            git push
+          fi
+
+      - name: Update PR Labels and Assignees
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python scripts/update_pr_metadata.py \
+            --pr-number ${{ github.event.pull_request.number }}
+
+      - name: Post Cognitive Score Comment
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            if (fs.existsSync('cognitive_score.json')) {
+              const score = JSON.parse(fs.readFileSync('cognitive_score.json'));
+              
+              const comment = `## 🧠 Cognitive Complexity Analysis
+              
+              **Total Score: ${score.total_score}/100** → **Tier ${score.tier}**
+              
+              | Component | Score | Details |
+              |-----------|-------|---------|
+              | Static Analysis | ${score.static_score}/40 | Code complexity, nesting, length |
+              | Impact Surface | ${score.impact_score}/30 | Files affected, blast radius |
+              | AI Assessment | ${score.ai_score}/30 | Comprehension difficulty |
+              
+              **AI Provider:** ${score.ai_provider || 'azure'}
+              **Reasoning:** ${score.reasoning}
+              
+              **Review Assignment:** ${score.tier === 0 ? 'Auto-merge on CI green' : 
+                                     score.tier === 1 ? 'Single reviewer (12h SLA)' : 
+                                     'Domain expert review (48h SLA)'}`;
+              
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            }
