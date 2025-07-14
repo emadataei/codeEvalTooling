@@ -68,22 +68,36 @@ jobs:
           script: |
             const fs = require('fs');
             
+            console.log('=== Quality Gate PR Comment Debug ===');
+            console.log('Event name:', context.eventName);
+            console.log('Event type:', context.payload.action);
+            console.log('Has issue context:', !!context.issue);
+            console.log('Has PR context:', !!context.payload.pull_request);
+            
             // Get PR number from different possible locations
             const prNumber = context.issue?.number || 
                            context.payload?.pull_request?.number || 
                            context.payload?.number;
             
+            console.log('Detected PR number:', prNumber);
+            
             // Check if this is a PR context
             if (!prNumber) {
               console.log('No PR number found, skipping comment');
+              console.log('Available context keys:', Object.keys(context));
+              if (context.payload) {
+                console.log('Payload keys:', Object.keys(context.payload));
+              }
               return;
             }
             
+            console.log('Attempting to read quality-gate-results.json...');
             let results = { passed: false, score: 0, summary: 'Failed to load results' };
             try {
               results = JSON.parse(fs.readFileSync('quality-gate-results.json', 'utf8'));
+              console.log('Quality gate results loaded successfully:', Object.keys(results));
             } catch (error) {
-              console.log('Could not read quality gate results:', error);
+              console.log('Could not read quality gate results:', error.message);
               return;
             }
             
@@ -130,31 +144,50 @@ jobs:
               comment += `\n**Cognitive Analysis Blocked** - Fix blocking issues before proceeding.\n`;
             }
             
-            // Find existing quality gate comment
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: prNumber,
-            });
+            console.log('Creating PR comment with content length:', comment.length);
+            console.log('Comment preview (first 100 chars):', comment.substring(0, 100));
             
-            const existingComment = comments.find(comment => 
-              comment.body.includes('Quality Gate')
-            );
-            
-            if (existingComment) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existingComment.id,
-                body: comment
-              });
-            } else {
-              await github.rest.issues.createComment({
+            try {
+              // Find existing quality gate comment
+              console.log('Looking for existing Quality Gate comments...');
+              const { data: comments } = await github.rest.issues.listComments({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: prNumber,
-                body: comment
               });
+              
+              console.log(`Found ${comments.length} total comments on PR`);
+              
+              const existingComment = comments.find(comment => 
+                comment.body.includes('Quality Gate')
+              );
+              
+              if (existingComment) {
+                console.log('Updating existing Quality Gate comment ID:', existingComment.id);
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: existingComment.id,
+                  body: comment
+                });
+                console.log('Successfully updated existing comment');
+              } else {
+                console.log('Creating new Quality Gate comment...');
+                const result = await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  body: comment
+                });
+                console.log('Successfully created new comment with ID:', result.data.id);
+              }
+            } catch (error) {
+              console.error('Error posting/updating comment:', error);
+              console.error('Error details:', error.message);
+              if (error.response) {
+                console.error('Response status:', error.response.status);
+                console.error('Response data:', error.response.data);
+              }
             }
       
       - name: Upload Quality Gate Results
