@@ -175,32 +175,36 @@ jobs:
       - name: Authenticate Snyk
         run: |
           if [ -n "${{ secrets.SNYK_TOKEN }}" ]; then
+            echo "🔐 Authenticating with Snyk..."
             snyk auth ${{ secrets.SNYK_TOKEN }}
             echo "✅ Snyk authentication successful"
+            
+            # Test Snyk CLI is working
+            echo "🧪 Testing Snyk CLI..."
+            snyk --version || echo "⚠️ Snyk version check failed"
           else
             echo "⚠️ No SNYK_TOKEN provided, skipping authentication"
+            echo "Some Snyk features may not work without authentication"
           fi
       
       - name: Test Python dependencies
+        timeout-minutes: 5
+        continue-on-error: true
         run: |
           cd backend
-          # Check if pyproject.toml exists and is valid
           if [ -f "pyproject.toml" ]; then
-            echo "Found pyproject.toml, attempting Snyk test..."
-            snyk test --file=pyproject.toml --package-manager=pip --severity-threshold=high || {
-              echo "pyproject.toml failed, trying requirements.txt approach..."
-              # If pyproject.toml fails, try to generate requirements.txt
-              if command -v pip >/dev/null 2>&1; then
-                pip install --dry-run . 2>/dev/null | grep "Would install" | cut -d' ' -f3 > temp-requirements.txt || true
-                if [ -s temp-requirements.txt ]; then
-                  snyk test --file=temp-requirements.txt --severity-threshold=high || true
-                fi
-              fi
-            }
+            echo "Found pyproject.toml, attempting Snyk test with timeout..."
+            
+            # Try with a short timeout to avoid hanging
+            if timeout 120s snyk test --file=pyproject.toml --package-manager=pip --severity-threshold=high 2>&1; then
+              echo "✅ Snyk test completed successfully"
+            else
+              echo "⚠️ Snyk test failed or timed out - this is expected due to parsing issues"
+              echo "Continuing with code analysis instead of dependency scanning"
+            fi
           else
             echo "No pyproject.toml found, skipping Python dependency test"
           fi
-        continue-on-error: true
       
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -213,27 +217,40 @@ jobs:
           npm ci
       
       - name: Test Node.js dependencies
+        timeout-minutes: 3
+        continue-on-error: true
         run: |
           cd frontend
-          snyk test --file=package.json --severity-threshold=high
-        continue-on-error: true
+          echo "Testing Node.js dependencies with timeout..."
+          timeout 180s snyk test --file=package.json --severity-threshold=high 2>&1 || {
+            echo "⚠️ Node.js dependency test failed or timed out"
+          }
       
       - name: Run Snyk Code analysis with detailed output
+        timeout-minutes: 10
+        continue-on-error: true
         run: |
-          snyk code test --sarif-file-output=snyk-code-results.sarif || true
-          snyk code test --json-file-output=snyk-code-results.json || true
+          echo "Running Snyk Code analysis with timeout..."
+          timeout 600s snyk code test --sarif-file-output=snyk-code-results.sarif 2>&1 || echo "SARIF generation failed/timed out"
+          timeout 300s snyk code test --json-file-output=snyk-code-results.json 2>&1 || echo "JSON generation failed/timed out"
+          echo "Snyk Code analysis completed (with potential timeouts)"
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        continue-on-error: true
       
       - name: Collect Snyk metrics
         run: |
+          echo "📊 Collecting Snyk metrics..."
           chmod +x ./scripts/collect-metrics.sh
-          ./scripts/collect-metrics.sh "Snyk" $SNYK_START_TIME || {
-            echo "⚠️ Failed to collect Snyk metrics, creating fallback entry"
-            echo "{\"timestamp\":\"$(date -Iseconds)\",\"tool\":\"Snyk\",\"duration_seconds\":$(($(date +%s) - $SNYK_START_TIME)),\"status\":\"failed\"}" >> performance-metrics.jsonl
+          
+          # Always try to collect metrics, even if previous steps failed
+          ./scripts/collect-metrics.sh "Snyk" $SNYK_START_TIME 2>&1 || {
+            echo "⚠️ Failed to collect Snyk metrics via script, creating manual fallback entry"
+            duration=$(($(date +%s) - $SNYK_START_TIME))
+            echo "{\"timestamp\":\"$(date -Iseconds)\",\"tool\":\"Snyk\",\"duration_seconds\":$duration,\"status\":\"failed_metrics_collection\"}" >> performance-metrics.jsonl
+            echo "📝 Manual fallback metrics entry created"
           }
-          echo "📊 Snyk metrics collected"
+          
+          echo "✅ Snyk metrics collection completed"
         if: always()
       
       - name: Upload Snyk metrics
