@@ -4,7 +4,6 @@ on:
     branches:
       - master
       - main
-      - eataei/worlkflowSetup
   pull_request:
     types: [opened, synchronize, reopened]
 
