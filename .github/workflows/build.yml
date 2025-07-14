@@ -8,9 +8,297 @@ on:
     types: [opened, synchronize, reopened]
 
 jobs:
+  quality-gate:
+    name: Quality Gate Analysis
+    runs-on: ubuntu-latest
+    outputs:
+      quality-passed: ${{ steps.quality-check.outputs.passed }}
+      quality-score: ${{ steps.quality-check.outputs.score }}
+      quality-penalty: ${{ steps.quality-check.outputs.penalty }}
+      blocking-issues: ${{ steps.quality-check.outputs.blocking_issues }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v41
+        with:
+          files: |
+            **/*.py
+            **/*.js
+            **/*.ts
+            **/*.jsx
+            **/*.tsx
+            **/*.java
+            **/*.cs
+            **/*.go
+            **/*.rs
+          files_ignore: |
+            **/*.md
+            **/*.txt
+            **/*.yml
+            **/*.yaml
+            **/*.json
+            **/Dockerfile
+      
+      - name: Run Quality Gate Analysis
+        id: quality-check
+        run: |
+          echo "Running Quality Gate Analysis..."
+          
+          # Create a script to run quality gate analysis
+          cat > run_quality_gate.py << 'EOF'
+          import sys
+          import json
+          import os
+          from pathlib import Path
+          
+          # Add src to Python path
+          sys.path.insert(0, 'src')
+          
+          from scoring.quality_gate import QualityGate
+          
+          def analyze_changed_files(file_list):
+              """Analyze changed files with quality gate."""
+              if not file_list.strip():
+                  print("No code files changed, skipping quality gate")
+                  return {
+                      'passed': True,
+                      'score': 100,
+                      'penalty': 0,
+                      'blocking_issues': 0,
+                      'summary': 'No code changes detected'
+                  }
+              
+              quality_gate = QualityGate()
+              pr_files = []
+              
+              # Process each changed file
+              for file_path in file_list.strip().split('\n'):
+                  if not file_path:
+                      continue
+                      
+                  try:
+                      with open(file_path, 'r', encoding='utf-8') as f:
+                          content = f.read()
+                      
+                      # Determine language from file extension
+                      ext = Path(file_path).suffix.lower()
+                      language_map = {
+                          '.py': 'python',
+                          '.js': 'javascript',
+                          '.jsx': 'javascript',
+                          '.ts': 'typescript',
+                          '.tsx': 'typescript',
+                          '.java': 'java',
+                          '.cs': 'csharp',
+                          '.go': 'go',
+                          '.rs': 'rust'
+                      }
+                      
+                      language = language_map.get(ext, 'unknown')
+                      
+                      pr_files.append({
+                          'path': file_path,
+                          'content': content,
+                          'language': language
+                      })
+                      
+                  except Exception as e:
+                      print(f"Warning: Could not read file {file_path}: {e}")
+              
+              if not pr_files:
+                  print("No valid code files found")
+                  return {
+                      'passed': True,
+                      'score': 100,
+                      'penalty': 0,
+                      'blocking_issues': 0,
+                      'summary': 'No valid code files to analyze'
+                  }
+              
+              # Run quality gate analysis
+              result = quality_gate.analyze_pr(pr_files)
+              
+              return {
+                  'passed': result.passed,
+                  'score': result.quality_score,
+                  'penalty': result.quality_penalty,
+                  'blocking_issues': len(result.blocking_issues),
+                  'summary': result.summary,
+                  'issues': {
+                      'blocking': [
+                          {
+                              'category': issue.category,
+                              'message': issue.message,
+                              'file': issue.file_path,
+                              'line': issue.line_number,
+                              'suggestion': issue.suggestion
+                          } for issue in result.blocking_issues
+                      ],
+                      'warning': [
+                          {
+                              'category': issue.category,
+                              'message': issue.message,
+                              'file': issue.file_path,
+                              'line': issue.line_number,
+                              'suggestion': issue.suggestion
+                          } for issue in result.warning_issues
+                      ]
+                  }
+              }
+          
+          if __name__ == '__main__':
+              changed_files = os.getenv('CHANGED_FILES', '')
+              result = analyze_changed_files(changed_files)
+              
+              # Output results for GitHub Actions
+              print(f"Quality Gate Result: {result['summary']}")
+              print(f"Quality Score: {result['score']}/100")
+              print(f"Blocking Issues: {result['blocking_issues']}")
+              
+              # Set outputs for GitHub Actions
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                  f.write(f"passed={str(result['passed']).lower()}\n")
+                  f.write(f"score={result['score']}\n")
+                  f.write(f"penalty={result['penalty']}\n")
+                  f.write(f"blocking_issues={result['blocking_issues']}\n")
+              
+              # Create detailed results file
+              with open('quality-gate-results.json', 'w') as f:
+                  json.dump(result, f, indent=2)
+              
+              # Exit with error if quality gate failed
+              if not result['passed']:
+                  print("\nQuality Gate FAILED - Blocking issues must be fixed!")
+                  for issue in result['issues']['blocking']:
+                      print(f"  BLOCKING {issue['category']}: {issue['message']}")
+                      if issue['file'] != 'PR':
+                          print(f"     Location: {issue['file']}:{issue['line']}")
+                      if issue['suggestion']:
+                          print(f"     Suggestion: {issue['suggestion']}")
+                  sys.exit(1)
+              else:
+                  print(f"\nQuality Gate PASSED")
+                  if result['issues']['warning']:
+                      print("Warnings found:")
+                      for issue in result['issues']['warning']:
+                          print(f"  WARNING {issue['category']}: {issue['message']}")
+          EOF
+          
+          python run_quality_gate.py
+        env:
+          CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+      
+      - name: Add Quality Gate Summary to PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            let results = { passed: false, score: 0, summary: 'Failed to load results' };
+            try {
+              results = JSON.parse(fs.readFileSync('quality-gate-results.json', 'utf8'));
+            } catch (error) {
+              console.log('Could not read quality gate results:', error);
+            }
+            
+            const passed = results.passed;
+            const score = results.score;
+            const icon = passed ? 'PASS' : 'FAIL';
+            const status = passed ? 'PASSED' : 'FAILED';
+            
+            let comment = `## ${icon} Quality Gate ${status}\n\n`;
+            comment += `**Score:** ${score}/100\n`;
+            comment += `**Summary:** ${results.summary}\n\n`;
+            
+            if (results.issues && results.issues.blocking && results.issues.blocking.length > 0) {
+              comment += `### BLOCKING Issues (Must Fix)\n\n`;
+              results.issues.blocking.forEach(issue => {
+                comment += `- **${issue.category}**: ${issue.message}\n`;
+                if (issue.file !== 'PR') {
+                  comment += `  - Location: \`${issue.file}:${issue.line}\`\n`;
+                }
+                if (issue.suggestion) {
+                  comment += `  - Suggestion: ${issue.suggestion}\n`;
+                }
+                comment += '\n';
+              });
+            }
+            
+            if (results.issues && results.issues.warning && results.issues.warning.length > 0) {
+              comment += `### Warnings\n\n`;
+              results.issues.warning.slice(0, 5).forEach(issue => {
+                comment += `- **${issue.category}**: ${issue.message}\n`;
+                if (issue.file !== 'PR') {
+                  comment += `  - Location: \`${issue.file}:${issue.line}\`\n`;
+                }
+                comment += '\n';
+              });
+              if (results.issues.warning.length > 5) {
+                comment += `... and ${results.issues.warning.length - 5} more warnings\n\n`;
+              }
+            }
+            
+            if (passed) {
+              comment += `\n**Ready for Cognitive Analysis** - Proceeding to next review stage.\n`;
+            } else {
+              comment += `\n**Cognitive Analysis Blocked** - Fix blocking issues before proceeding.\n`;
+            }
+            
+            // Find existing quality gate comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const existingComment = comments.find(comment => 
+              comment.body.includes('Quality Gate')
+            );
+            
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body: comment
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: comment
+              });
+            }
+      
+      - name: Upload Quality Gate Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-gate-results
+          path: quality-gate-results.json
+        if: always()
+
   sonarqube:
     name: SonarQube
     runs-on: ubuntu-latest
+    needs: quality-gate
+    # Continue even if quality gate has warnings, but not if it fails completely
+    if: always() && (needs.quality-gate.outputs.quality-passed == 'true' || needs.quality-gate.outputs.blocking-issues == '0')
     steps:
       - uses: actions/checkout@v4
         with:
@@ -51,6 +339,9 @@ jobs:
   codeql:
     name: CodeQL Analysis
     runs-on: ubuntu-latest
+    needs: quality-gate
+    # Continue even if quality gate has warnings, but not if it fails completely
+    if: always() && (needs.quality-gate.outputs.quality-passed == 'true' || needs.quality-gate.outputs.blocking-issues == '0')
     permissions:
       actions: read
       contents: read
@@ -105,6 +396,9 @@ jobs:
   semgrep:
     name: Semgrep Analysis
     runs-on: ubuntu-latest
+    needs: quality-gate
+    # Continue even if quality gate has warnings, but not if it fails completely  
+    if: always() && (needs.quality-gate.outputs.quality-passed == 'true' || needs.quality-gate.outputs.blocking-issues == '0')
     steps:
       - uses: actions/checkout@v4
       
@@ -155,6 +449,9 @@ jobs:
   snyk:
     name: Snyk Security Analysis
     runs-on: ubuntu-latest
+    needs: quality-gate
+    # Continue even if quality gate has warnings, but not if it fails completely
+    if: always() && (needs.quality-gate.outputs.quality-passed == 'true' || needs.quality-gate.outputs.blocking-issues == '0')
     steps:
       - uses: actions/checkout@v4
       
@@ -270,10 +567,325 @@ jobs:
           path: snyk-code-results.json
         if: always()
 
+  cognitive-scoring:
+    name: Cognitive Complexity Analysis
+    runs-on: ubuntu-latest
+    needs: quality-gate
+    if: needs.quality-gate.outputs.quality-passed == 'true'
+    outputs:
+      tier: ${{ steps.cognitive-analysis.outputs.tier }}
+      total-score: ${{ steps.cognitive-analysis.outputs.total_score }}
+      reasoning: ${{ steps.cognitive-analysis.outputs.reasoning }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Download Quality Gate Results
+        uses: actions/download-artifact@v4
+        with:
+          name: quality-gate-results
+      
+      - name: Get changed files for cognitive analysis
+        id: changed-files
+        uses: tj-actions/changed-files@v41
+        with:
+          files: |
+            **/*.py
+            **/*.js
+            **/*.ts
+            **/*.jsx
+            **/*.tsx
+            **/*.java
+            **/*.cs
+            **/*.go
+            **/*.rs
+      
+      - name: Run Cognitive Analysis
+        id: cognitive-analysis
+        run: |
+          echo "Running Cognitive Complexity Analysis..."
+          
+          # Create a script to run cognitive analysis
+          cat > run_cognitive_analysis.py << 'EOF'
+          import sys
+          import json
+          import os
+          from pathlib import Path
+          
+          # Add src to Python path
+          sys.path.insert(0, 'src')
+          
+          from scoring.cognitive_analyzer import CognitiveAnalyzer
+          
+          def run_cognitive_analysis(file_list, quality_penalty=0):
+              """Run cognitive analysis on changed files."""
+              if not file_list.strip():
+                  print("No code files changed, assigning Tier 0")
+                  return {
+                      'tier': 0,
+                      'total_score': 0,
+                      'reasoning': 'No code changes detected',
+                      'static_score': 0,
+                      'impact_score': 0,
+                      'ai_score': 0,
+                      'quality_penalty': 0
+                  }
+              
+              try:
+                  analyzer = CognitiveAnalyzer()
+              except Exception as e:
+                  print(f"Warning: Could not initialize AI client: {e}")
+                  print("Falling back to static analysis only")
+                  # Create a minimal analyzer without AI
+                  class MinimalAnalyzer:
+                      def analyze_pr(self, files):
+                          from scoring.cognitive_analyzer import CognitiveScore
+                          return CognitiveScore(
+                              static_score=10,
+                              impact_score=5,
+                              ai_score=0,
+                              total_score=15 + quality_penalty,
+                              tier=0 if 15 + quality_penalty <= 25 else 1,
+                              reasoning="Static analysis only (AI unavailable)"
+                          )
+                  analyzer = MinimalAnalyzer()
+              
+              pr_files = []
+              
+              # Process each changed file
+              for file_path in file_list.strip().split('\n'):
+                  if not file_path:
+                      continue
+                      
+                  try:
+                      with open(file_path, 'r', encoding='utf-8') as f:
+                          content = f.read()
+                      
+                      # Determine language from file extension
+                      ext = Path(file_path).suffix.lower()
+                      language_map = {
+                          '.py': 'python',
+                          '.js': 'javascript',
+                          '.jsx': 'javascript',
+                          '.ts': 'typescript',
+                          '.tsx': 'typescript',
+                          '.java': 'java',
+                          '.cs': 'csharp',
+                          '.go': 'go',
+                          '.rs': 'rust'
+                      }
+                      
+                      language = language_map.get(ext, 'unknown')
+                      
+                      pr_files.append({
+                          'path': file_path,
+                          'content': content,
+                          'language': language
+                      })
+                      
+                  except Exception as e:
+                      print(f"Warning: Could not read file {file_path}: {e}")
+              
+              if not pr_files:
+                  print("No valid code files found")
+                  return {
+                      'tier': 0,
+                      'total_score': quality_penalty,
+                      'reasoning': 'No valid code files to analyze',
+                      'static_score': 0,
+                      'impact_score': 0,
+                      'ai_score': 0,
+                      'quality_penalty': quality_penalty
+                  }
+              
+              # Run cognitive analysis
+              result = analyzer.analyze_pr(pr_files)
+              
+              # Add quality penalty to total score
+              adjusted_total = result.total_score + quality_penalty
+              
+              # Recalculate tier with penalty
+              if adjusted_total <= 25:
+                  tier = 0
+              elif adjusted_total <= 65:
+                  tier = 1
+              else:
+                  tier = 2
+              
+              # Update reasoning with quality penalty info
+              reasoning = result.reasoning
+              if quality_penalty > 0:
+                  reasoning += f" (Quality penalty: +{quality_penalty} points)"
+              
+              return {
+                  'tier': tier,
+                  'total_score': adjusted_total,
+                  'reasoning': reasoning,
+                  'static_score': result.static_score,
+                  'impact_score': result.impact_score,
+                  'ai_score': result.ai_score,
+                  'quality_penalty': quality_penalty
+              }
+          
+          if __name__ == '__main__':
+              changed_files = os.getenv('CHANGED_FILES', '')
+              
+              # Load quality penalty from quality gate results
+              quality_penalty = 0
+              try:
+                  with open('quality-gate-results.json', 'r') as f:
+                      quality_results = json.load(f)
+                      quality_penalty = quality_results.get('penalty', 0)
+                      print(f"Quality penalty from gate: {quality_penalty}")
+              except Exception as e:
+                  print(f"Could not load quality results: {e}")
+              
+              result = run_cognitive_analysis(changed_files, quality_penalty)
+              
+              # Output results for GitHub Actions
+              print(f"Cognitive Analysis Result:")
+              print(f"  Tier: {result['tier']}")
+              print(f"  Total Score: {result['total_score']}")
+              print(f"  Reasoning: {result['reasoning']}")
+              
+              # Set outputs for GitHub Actions
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                  f.write(f"tier={result['tier']}\n")
+                  f.write(f"total_score={result['total_score']}\n")
+                  f.write(f"reasoning={result['reasoning']}\n")
+              
+              # Create detailed results file
+              with open('cognitive-analysis-results.json', 'w') as f:
+                  json.dump(result, f, indent=2)
+              
+              print(f"\nCognitive Analysis Complete - Assigned to Tier {result['tier']}")
+          EOF
+          
+          python run_cognitive_analysis.py
+        env:
+          CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+          AI_FOUNDRY_ENDPOINT: ${{ secrets.AI_FOUNDRY_ENDPOINT }}
+          AI_FOUNDRY_TOKEN: ${{ secrets.AI_FOUNDRY_TOKEN }}
+          AI_FOUNDRY_MODEL: ${{ secrets.AI_FOUNDRY_MODEL }}
+      
+      - name: Add Cognitive Analysis Summary to PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            let results = { tier: 0, total_score: 0, reasoning: 'Failed to load results' };
+            try {
+              results = JSON.parse(fs.readFileSync('cognitive-analysis-results.json', 'utf8'));
+            } catch (error) {
+              console.log('Could not read cognitive analysis results:', error);
+            }
+            
+            const tier = results.tier;
+            const score = results.total_score;
+            
+            // Determine tier details
+            const tierInfo = {
+              0: { icon: 'TIER0', name: 'Tier 0', action: 'Auto-mergeable', color: 'green' },
+              1: { icon: 'TIER1', name: 'Tier 1', action: 'Light Review Required', color: 'yellow' },
+              2: { icon: 'TIER2', name: 'Tier 2', action: 'Deep Review Required', color: 'red' }
+            };
+            
+            const info = tierInfo[tier] || tierInfo[2];
+            
+            let comment = `## Cognitive Complexity Analysis\n\n`;
+            comment += `### ${info.icon} ${info.name} - ${info.action}\n\n`;
+            comment += `**Total Score:** ${score} points\n`;
+            comment += `**Reasoning:** ${results.reasoning}\n\n`;
+            
+            if (results.static_score !== undefined) {
+              comment += `### Score Breakdown\n`;
+              comment += `- **Static Analysis:** ${results.static_score}/40 points\n`;
+              comment += `- **Impact Surface:** ${results.impact_score}/30 points\n`;
+              comment += `- **AI Complexity:** ${results.ai_score}/30 points\n`;
+              if (results.quality_penalty > 0) {
+                comment += `- **Quality Penalty:** +${results.quality_penalty} points\n`;
+              }
+              comment += '\n';
+            }
+            
+            comment += `### Review Guidelines\n`;
+            if (tier === 0) {
+              comment += `- **Auto-merge eligible** (if all checks pass)\n`;
+              comment += `- No human review required\n`;
+              comment += `- Low complexity change\n`;
+            } else if (tier === 1) {
+              comment += `- **Single reviewer** required\n`;
+              comment += `- **12-hour SLA** for review\n`;
+              comment += `- Standard review process\n`;
+            } else {
+              comment += `- **Domain expert review** required\n`;
+              comment += `- **48-hour SLA** for review\n`;
+              comment += `- High complexity - careful review needed\n`;
+            }
+            
+            // Find existing cognitive analysis comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const existingComment = comments.find(comment => 
+              comment.body.includes('Cognitive Complexity Analysis')
+            );
+            
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body: comment
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: comment
+              });
+            }
+            
+            // Set PR labels based on tier
+            const labels = [`tier-${tier}`];
+            if (tier === 0) labels.push('auto-merge-candidate');
+            if (tier === 2) labels.push('needs-expert-review');
+            
+            await github.rest.issues.setLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: labels
+            });
+      
+      - name: Upload Cognitive Analysis Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: cognitive-analysis-results
+          path: cognitive-analysis-results.json
+        if: always()
+
   metrics-aggregation:
     name: Aggregate Performance Metrics
     runs-on: ubuntu-latest
-    needs: [sonarqube, codeql, semgrep, snyk]
+    needs: [quality-gate, cognitive-scoring, sonarqube, codeql, semgrep, snyk]
     if: always()
     steps:
       - uses: actions/checkout@v4
@@ -281,7 +893,7 @@ jobs:
       - name: Download all metrics artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: "*-metrics*"
+          pattern: "*-metrics* | *-results"
           merge-multiple: true
       
       - name: Debug - Show downloaded metrics
@@ -350,6 +962,48 @@ jobs:
         run: |
           echo "## 🔒 Security Analysis Report" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Add Quality Gate Summary
+          if [ -f quality-gate-results.json ]; then
+            echo "### Quality Gate Results" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            quality_passed=$(cat quality-gate-results.json | grep -o '"passed":[^,}]*' | cut -d':' -f2 | tr -d '"' || echo "unknown")
+            quality_score=$(cat quality-gate-results.json | grep -o '"score":[^,}]*' | cut -d':' -f2 | tr -d '"' || echo "unknown")
+            blocking_issues=$(cat quality-gate-results.json | grep -o '"blocking_issues":[^,}]*' | cut -d':' -f2 | tr -d '"' || echo "0")
+            
+            if [ "$quality_passed" = "true" ]; then
+              echo "| Status | Score | Blocking Issues |" >> $GITHUB_STEP_SUMMARY
+              echo "|--------|-------|-----------------|" >> $GITHUB_STEP_SUMMARY
+              echo "| PASSED | $quality_score/100 | $blocking_issues |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| Status | Score | Blocking Issues |" >> $GITHUB_STEP_SUMMARY
+              echo "|--------|-------|-----------------|" >> $GITHUB_STEP_SUMMARY
+              echo "| FAILED | $quality_score/100 | $blocking_issues |" >> $GITHUB_STEP_SUMMARY
+            fi
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Add Cognitive Analysis Summary
+          if [ -f cognitive-analysis-results.json ]; then
+            echo "### Cognitive Complexity Analysis" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            tier=$(cat cognitive-analysis-results.json | grep -o '"tier":[^,}]*' | cut -d':' -f2 | tr -d '"' || echo "unknown")
+            total_score=$(cat cognitive-analysis-results.json | grep -o '"total_score":[^,}]*' | cut -d':' -f2 | tr -d '"' || echo "unknown")
+            
+            case $tier in
+              0) tier_info="Tier 0 (Auto-mergeable)" ;;
+              1) tier_info="Tier 1 (Light Review)" ;;
+              2) tier_info="Tier 2 (Deep Review)" ;;
+              *) tier_info="Unknown Tier" ;;
+            esac
+            
+            echo "| Tier | Total Score | Review Requirement |" >> $GITHUB_STEP_SUMMARY
+            echo "|------|-------------|-------------------|" >> $GITHUB_STEP_SUMMARY
+            echo "| $tier_info | $total_score points | See PR comments |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
           
           if [ -f performance-metrics.jsonl ]; then
             echo "### 🔒 Security Findings" >> $GITHUB_STEP_SUMMARY
