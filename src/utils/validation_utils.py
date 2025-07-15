@@ -65,8 +65,7 @@ def format_currency(amount: float, currency_code: str = "USD") -> str:
         "USD": "$",
         "EUR": "€", 
         "GBP": "£",
-        "JPY": "¥",
-        "CAD": "C$"
+        "JPY": "¥"
     }
     
     symbol = currency_symbols.get(currency_code, currency_code)
