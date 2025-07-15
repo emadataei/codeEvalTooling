@@ -54,25 +54,19 @@ def format_currency(amount: float, currency_code: str = "USD") -> str:
     """
     Format a monetary amount with currency symbol.
     
-    Supports major international currencies including USD, EUR, GBP, JPY,
-    CAD, AUD, CHF, and SEK. Falls back to currency code if symbol not found.
-    
     Args:
         amount: The monetary amount to format
         currency_code: ISO currency code (default: USD)
         
     Returns:
-        str: Formatted currency string (e.g., "$1,234.56", "€1.234,56")
+        str: Formatted currency string
     """
     currency_symbols = {
         "USD": "$",
         "EUR": "€", 
         "GBP": "£",
         "JPY": "¥",
-        "CAD": "C$",
-        "AUD": "A$",
-        "CHF": "CHF",
-        "SEK": "kr"
+        "CAD": "C$"
     }
     
     symbol = currency_symbols.get(currency_code, currency_code)
