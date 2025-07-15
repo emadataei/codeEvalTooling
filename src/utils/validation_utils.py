@@ -217,3 +217,132 @@ def parse_csv_line(line: str, delimiter: str = ',') -> List[str]:
     fields.append(current_field.strip())
     
     return fields
+
+
+def validate_business_rules(user_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Validate complex business rules for user registration and profile updates.
+    
+    This function implements multi-step validation including age verification,
+    geographic restrictions, subscription tier validation, and promotional eligibility.
+    
+    Args:
+        user_data: Dictionary containing user information
+        
+    Returns:
+        dict: Validation results with detailed feedback and action items
+    """
+    errors = []
+    warnings = []
+    actions = []
+    risk_score = 0
+    
+    # Age and eligibility validation
+    if 'birth_date' in user_data:
+        age = calculate_age(user_data['birth_date'])
+        if age < 13:
+            errors.append("User must be at least 13 years old")
+            risk_score += 50
+        elif age < 18:
+            warnings.append("Minor account requires parental consent")
+            actions.append("request_parental_consent")
+            risk_score += 20
+        elif age > 120:
+            errors.append("Invalid birth date - age exceeds reasonable limits")
+            risk_score += 30
+    
+    # Geographic and regulatory compliance
+    if 'country' in user_data:
+        restricted_countries = ['XX', 'YY', 'ZZ']  # Placeholder codes
+        if user_data['country'] in restricted_countries:
+            errors.append(f"Service not available in {user_data['country']}")
+            risk_score += 100
+        
+        # GDPR compliance for EU countries
+        eu_countries = ['DE', 'FR', 'IT', 'ES', 'NL', 'BE', 'AT', 'IE']
+        if user_data['country'] in eu_countries:
+            actions.append("require_gdpr_consent")
+            if 'gdpr_consent' not in user_data or not user_data['gdpr_consent']:
+                errors.append("GDPR consent required for EU residents")
+    
+    # Subscription and feature validation
+    if 'subscription_tier' in user_data:
+        tier = user_data['subscription_tier'].lower()
+        if tier == 'premium':
+            # Premium users get additional validation
+            if 'payment_method' not in user_data:
+                errors.append("Premium subscription requires valid payment method")
+            else:
+                if not validate_payment_method(user_data['payment_method']):
+                    errors.append("Invalid payment method for premium subscription")
+                    
+        elif tier == 'enterprise':
+            # Enterprise validation
+            if 'company_domain' not in user_data:
+                errors.append("Enterprise subscription requires company domain")
+            elif not user_data.get('email', '').endswith('@' + user_data['company_domain']):
+                warnings.append("Email domain does not match company domain")
+                risk_score += 15
+    
+    # Promotional and marketing validation
+    if user_data.get('promotional_emails', False):
+        if 'marketing_consent' not in user_data:
+            warnings.append("Promotional emails require explicit marketing consent")
+            actions.append("request_marketing_consent")
+    
+    # Calculate final validation status
+    is_valid = len(errors) == 0
+    requires_manual_review = risk_score > 50 or len(warnings) > 2
+    
+    return {
+        "valid": is_valid,
+        "requires_manual_review": requires_manual_review,
+        "risk_score": risk_score,
+        "errors": errors,
+        "warnings": warnings,
+        "required_actions": actions,
+        "summary": f"Validation {'passed' if is_valid else 'failed'} with risk score {risk_score}"
+    }
+
+
+def validate_payment_method(payment_data: Dict[str, Any]) -> bool:
+    """
+    Validate payment method information for subscription processing.
+    
+    Args:
+        payment_data: Dictionary containing payment method details
+        
+    Returns:
+        bool: True if payment method is valid
+    """
+    if not payment_data or 'type' not in payment_data:
+        return False
+    
+    payment_type = payment_data['type'].lower()
+    
+    if payment_type == 'credit_card':
+        required_fields = ['number', 'expiry_month', 'expiry_year', 'cvv']
+        for field in required_fields:
+            if field not in payment_data:
+                return False
+        
+        # Basic card number validation (simplified)
+        card_number = str(payment_data['number']).replace(' ', '').replace('-', '')
+        if not card_number.isdigit() or len(card_number) < 13 or len(card_number) > 19:
+            return False
+            
+    elif payment_type == 'paypal':
+        if 'email' not in payment_data:
+            return False
+        if not validate_email(payment_data['email']):
+            return False
+            
+    elif payment_type == 'bank_transfer':
+        required_fields = ['account_number', 'routing_number', 'account_type']
+        for field in required_fields:
+            if field not in payment_data:
+                return False
+    else:
+        return False  # Unsupported payment type
+    
+    return True
