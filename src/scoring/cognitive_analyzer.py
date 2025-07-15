@@ -1,3 +1,15 @@
+"""
+Cognitive Complexity Analyzer for Pull Request Review Automation
+
+This module implements a multi-dimensional scoring system to automatically
+determine appropriate review tiers and automation levels for pull requests.
+
+For detailed scoring documentation, see: docs/cognitive_scoring.md
+
+The analyzer combines static code analysis, impact assessment, and AI-powered
+complexity evaluation to assign cognitive scores and review tiers.
+"""
+
 import ast
 import re
 import os
@@ -15,6 +27,45 @@ class CognitiveScore:
     tier: int
     reasoning: str
     quality_penalty: int = 0
+
+# Scoring Constants
+class ScoringThresholds:
+    """Constants for cognitive complexity scoring thresholds"""
+    
+    # Score Caps
+    STATIC_SCORE_MAX = 40
+    IMPACT_SCORE_MAX = 30  
+    AI_SCORE_MAX = 30
+    STATIC_SCORE_PER_FILE_MAX = 40
+    
+    # Tier Thresholds
+    TIER_0_THRESHOLD = 35  # Auto-merge
+    TIER_1_THRESHOLD = 65  # Standard review
+    # Tier 2 = anything above TIER_1_THRESHOLD (Expert review)
+    
+    # Static Scoring
+    CONTROL_STRUCTURE_POINTS = 1
+    FUNCTION_LENGTH_LARGE_PENALTY = 3  # >50 lines
+    FUNCTION_LENGTH_MEDIUM_PENALTY = 1  # >20 lines
+    FUNCTION_LENGTH_LARGE_THRESHOLD = 50
+    FUNCTION_LENGTH_MEDIUM_THRESHOLD = 20
+    
+    # Impact Scoring
+    IMPORTS_PER_POINT = 5  # 1 point per 5 imports
+    IMPORTS_MAX_POINTS = 5
+    DATABASE_API_POINTS = 3
+    
+    # AI Scoring (Heuristic fallback)
+    COMPLEX_PATTERN_POINTS = 5
+    BUSINESS_LOGIC_POINTS = 3
+    DATA_STRUCTURE_POINTS = 2
+    
+    # Generic Language Analysis
+    BRACKETS_PER_POINT = 3  # 1 point per 3 brackets
+    LARGE_FILE_THRESHOLD = 100
+    LARGE_FILE_PENALTY = 5
+    MEDIUM_FILE_THRESHOLD = 50
+    MEDIUM_FILE_PENALTY = 2
 
 class CognitiveAnalyzer:
     def __init__(self):
@@ -41,7 +92,13 @@ class CognitiveAnalyzer:
         
         # Add quality penalty to total score
         total_score = static_score + impact_score + ai_score + quality_penalty
-        tier = self._assign_tier(total_score)
+        
+        # Check for auto-merge eligibility before tier assignment
+        if self._is_auto_merge_eligible(pr_files, total_score):
+            tier = 0
+        else:
+            tier = self._assign_tier(total_score)
+            
         reasoning = self._generate_reasoning(static_score, impact_score, ai_score, quality_penalty)
         
         return CognitiveScore(
@@ -55,7 +112,14 @@ class CognitiveAnalyzer:
         )
     
     def _calculate_static_score(self, pr_files: List[Dict]) -> int:
-        """Calculate complexity from static analysis"""
+        """
+        Calculate complexity from static analysis.
+        
+        Analyzes code structure, control flow, and function complexity.
+        Different analysis approaches for different languages.
+        
+        Returns: 0-40 points (capped)
+        """
         total_score = 0
         
         for file_info in pr_files:
@@ -66,67 +130,102 @@ class CognitiveAnalyzer:
             else:
                 score = self._analyze_generic_complexity(file_info['content'])
             
-            total_score += min(score, 40)  # Cap per file
+            # Cap per file to prevent single complex file from dominating
+            total_score += min(score, ScoringThresholds.STATIC_SCORE_PER_FILE_MAX)
         
-        return min(total_score, 40)  # Cap total static score
+        return min(total_score, ScoringThresholds.STATIC_SCORE_MAX)
     
     def _analyze_python_complexity(self, content: str) -> int:
-        """Analyze Python-specific complexity metrics"""
+        """
+        Analyze Python-specific complexity metrics using AST.
+        
+        Scoring breakdown:
+        - Control structures (if/for/while/with): +1 each
+        - Nesting depth: +1 per level  
+        - Function length penalties: +1 (>20 lines), +3 (>50 lines)
+        
+        Returns: Complexity score for this file
+        """
         try:
             tree = ast.parse(content)
             complexity = 0
             
             for node in ast.walk(tree):
+                # Count control structures
                 if isinstance(node, (ast.If, ast.For, ast.While, ast.With)):
-                    complexity += 1
+                    complexity += ScoringThresholds.CONTROL_STRUCTURE_POINTS
                 elif isinstance(node, ast.FunctionDef):
-                    # Count nested levels
+                    # Add nesting depth penalty
                     depth = self._calculate_nesting_depth(node)
                     complexity += depth
                     
-                    # Function length penalty
+                    # Function length penalties
                     lines = len(content.splitlines())
-                    if lines > 50:
-                        complexity += 3
-                    elif lines > 20:
-                        complexity += 1
+                    if lines > ScoringThresholds.FUNCTION_LENGTH_LARGE_THRESHOLD:
+                        complexity += ScoringThresholds.FUNCTION_LENGTH_LARGE_PENALTY
+                    elif lines > ScoringThresholds.FUNCTION_LENGTH_MEDIUM_THRESHOLD:
+                        complexity += ScoringThresholds.FUNCTION_LENGTH_MEDIUM_PENALTY
             
             return complexity
         except Exception:
+            # Fall back to generic analysis if AST parsing fails
             return self._analyze_generic_complexity(content)
     
     def _calculate_impact_score(self, pr_files: List[Dict]) -> int:
-        """Calculate impact based on files changed and blast radius"""
+        """
+        Calculate impact based on files changed and blast radius.
+        
+        Scoring breakdown:
+        - File type weights: Migration(10), Schema(10), Payment(9), API(8), Security(8), Config(6), Test(2), Doc(1)
+        - Dependencies: +1 per 5 imports (max +5)
+        - External integrations: +3 for database/API keywords
+        
+        Returns: 0-30 points (capped)
+        """
         impact_score = 0
         
         for file_info in pr_files:
             file_path = file_info['path'].lower()
             
-            # File type impact
+            # File type impact weights
             for pattern, weight in self.file_impact_weights.items():
                 if pattern in file_path:
                     impact_score += weight
                     break
             
-            # Cross-module dependencies
+            # Cross-module dependencies (import counting)
             imports = self._count_imports(file_info['content'])
-            impact_score += min(imports // 5, 5)  # 1 point per 5 imports, max 5
+            dependency_points = min(imports // ScoringThresholds.IMPORTS_PER_POINT, 
+                                  ScoringThresholds.IMPORTS_MAX_POINTS)
+            impact_score += dependency_points
             
-            # Database/API changes
+            # Database/API integration changes
             if any(keyword in file_info['content'].lower() 
                    for keyword in ['database', 'db.', 'api.', 'fetch(', 'axios']):
-                impact_score += 3
+                impact_score += ScoringThresholds.DATABASE_API_POINTS
         
-        return min(impact_score, 30)
+        return min(impact_score, ScoringThresholds.IMPACT_SCORE_MAX)
     
     def _calculate_ai_score(self, pr_files: List[Dict]) -> int:
-        """Use AI Foundry to assess code comprehension difficulty"""
+        """
+        Use AI Foundry to assess code comprehension difficulty.
+        
+        AI evaluates:
+        - Comprehension difficulty
+        - Business rule complexity  
+        - Unusual patterns or anti-patterns
+        - Required domain knowledge
+        
+        Falls back to heuristic scoring if AI unavailable.
+        
+        Returns: 0-30 points (capped)
+        """
         if not self.ai_client:
             return self._heuristic_ai_score(pr_files)
             
         try:
-            # Combine all changed code for analysis
-            combined_code = "\n".join([f['content'] for f in pr_files[:3]])  # Limit for API
+            # Combine changed code for analysis (limit for API constraints)
+            combined_code = "\n".join([f['content'] for f in pr_files[:3]])
             
             prompt = f"""
             Analyze this code change for cognitive complexity. Rate 0-30 based on:
@@ -153,47 +252,130 @@ class CognitiveAnalyzer:
                 temperature=0.1
             )
             
+            # Extract numeric score from response
             score = int(re.search(r'\d+', response.choices[0].message.content).group())
-            return min(max(score, 0), 30)
+            return min(max(score, 0), ScoringThresholds.AI_SCORE_MAX)
             
         except Exception as e:
             print(f"AI analysis failed: {e}, falling back to heuristic scoring")
             return self._heuristic_ai_score(pr_files)
     
     def _heuristic_ai_score(self, pr_files: List[Dict]) -> int:
-        """Fallback heuristic scoring when AI is unavailable"""
+        """
+        Fallback heuristic scoring when AI is unavailable.
+        
+        Pattern-based scoring:
+        - Complex patterns (+5): algorithm, recursive, optimization, performance, threading, async, promise, callback
+        - Business logic (+3): pricing, payment, billing, discount, tax, inventory, order, subscription  
+        - Data structures (+2): nested, recursive, tree, graph, matrix
+        
+        Returns: 0-30 points (capped)
+        """
         score = 0
         
         for file_info in pr_files:
             content = file_info['content'].lower()
             
-            # Complex patterns that indicate higher cognitive load
-            if any(pattern in content for pattern in [
+            # Complex algorithmic patterns that indicate higher cognitive load
+            complex_patterns = [
                 'algorithm', 'recursive', 'optimization', 'performance',
                 'threading', 'async', 'promise', 'callback'
-            ]):
-                score += 5
+            ]
+            if any(pattern in content for pattern in complex_patterns):
+                score += ScoringThresholds.COMPLEX_PATTERN_POINTS
             
-            # Business logic indicators
-            if any(pattern in content for pattern in [
+            # Business logic indicators requiring domain knowledge
+            business_patterns = [
                 'pricing', 'payment', 'billing', 'discount', 'tax',
                 'inventory', 'order', 'subscription'
-            ]):
-                score += 3
+            ]
+            if any(pattern in content for pattern in business_patterns):
+                score += ScoringThresholds.BUSINESS_LOGIC_POINTS
                 
-            # Complex data structures
-            if any(pattern in content for pattern in [
+            # Complex data structure manipulation
+            data_structure_patterns = [
                 'nested', 'recursive', 'tree', 'graph', 'matrix'
-            ]):
-                score += 2
+            ]
+            if any(pattern in content for pattern in data_structure_patterns):
+                score += ScoringThresholds.DATA_STRUCTURE_POINTS
         
-        return min(score, 30)
+        return min(score, ScoringThresholds.AI_SCORE_MAX)
+    
+    def _is_auto_merge_eligible(self, pr_files: List[Dict], total_score: int) -> bool:
+        """
+        Check if PR is eligible for auto-merge (Tier 0).
+        
+        Additional checks beyond just total score to ensure safety:
+        - Must be below Tier 0 threshold
+        - No high-impact files (migrations, schemas, security)
+        - No complex individual files
+        - Limited number of files changed
+        
+        Args:
+            pr_files: List of changed files with metadata
+            total_score: Combined total score (before tier assignment)
+            
+        Returns:
+            bool: True if eligible for auto-merge, False otherwise
+        """
+        # Must meet basic threshold requirement
+        if total_score > ScoringThresholds.TIER_0_THRESHOLD:
+            return False
+            
+        # Limit number of changed files for auto-merge
+        if len(pr_files) > 5:
+            return False
+            
+        # Check for high-impact file types that should never auto-merge
+        high_impact_patterns = ['migration', 'schema', 'security', 'payment']
+        for file_info in pr_files:
+            file_path = file_info['path'].lower()
+            if any(pattern in file_path for pattern in high_impact_patterns):
+                return False
+                
+        # Check individual file complexity (prevent one complex file from sneaking through)
+        for file_info in pr_files:
+            if file_info['language'] == 'python':
+                file_complexity = self._analyze_python_complexity(file_info['content'])
+            elif file_info['language'] in ['javascript', 'typescript']:
+                file_complexity = self._analyze_js_complexity(file_info['content'])
+            else:
+                file_complexity = self._analyze_generic_complexity(file_info['content'])
+                
+            # If any single file is too complex, require human review
+            if file_complexity > 15:
+                return False
+                
+        return True
     
     def _assign_tier(self, total_score: int) -> int:
-        """Assign tier based on total cognitive score"""
-        if total_score <= 25:
+        """
+        Assign review tier based on total cognitive score.
+        
+        Tier 0 (Auto-merge): ≤ 35 points
+        - Automated merge on CI success
+        - No human review required
+        - Simple utility functions, docs, configs
+        
+        Tier 1 (Standard Review): 36-65 points
+        - Standard peer review required  
+        - 1-2 reviewers needed
+        - Most feature development
+        
+        Tier 2 (Expert Review): 66+ points
+        - Senior/expert review required
+        - Domain expertise needed
+        - Complex algorithms, critical systems
+        
+        Args:
+            total_score: Combined static + impact + AI + quality penalty score
+            
+        Returns:
+            int: Review tier (0, 1, or 2)
+        """
+        if total_score <= ScoringThresholds.TIER_0_THRESHOLD:
             return 0
-        elif total_score <= 65:
+        elif total_score <= ScoringThresholds.TIER_1_THRESHOLD:
             return 1
         else:
             return 2
@@ -213,36 +395,58 @@ class CognitiveAnalyzer:
         return max_depth
     
     def _analyze_js_complexity(self, content: str) -> int:
-        """Analyze JavaScript/TypeScript complexity"""
+        """
+        Analyze JavaScript/TypeScript complexity.
+        
+        Scoring breakdown:
+        - Control structures: +1 each (if/for/while/switch/try/catch)
+        - Functions: +1 each (function declarations and arrows)
+        - Async patterns: +1 each (.then/.catch/callback calls)
+        
+        Returns: Complexity score for this file
+        """
         complexity = 0
         
         # Count control structures
-        complexity += len(re.findall(r'\b(if|for|while|switch|try|catch)\b', content))
+        control_patterns = r'\b(if|for|while|switch|try|catch)\b'
+        complexity += len(re.findall(control_patterns, content))
         
-        # Count functions
-        complexity += len(re.findall(r'\bfunction\b|\b=>\b', content))
+        # Count function definitions
+        function_patterns = r'\bfunction\b|\b=>\b'
+        complexity += len(re.findall(function_patterns, content))
         
-        # Nested callbacks
-        complexity += len(re.findall(r'\.then\(|\.catch\(|callback\(', content))
+        # Count async/callback patterns
+        async_patterns = r'\.then\(|\.catch\(|callback\('
+        complexity += len(re.findall(async_patterns, content))
         
         return complexity
     
     def _analyze_generic_complexity(self, content: str) -> int:
-        """Generic complexity analysis for other languages"""
+        """
+        Generic complexity analysis for other languages.
+        
+        Scoring breakdown:
+        - Control structures: +1 each (if/for/while/switch/try/catch)
+        - Structural complexity: +1 per 3 brackets (rough nesting estimate)
+        - File size penalties: +2 (>50 lines), +5 (>100 lines)
+        
+        Returns: Complexity score for this file
+        """
         complexity = 0
         
-        # Count control structures
-        complexity += len(re.findall(r'\b(if|for|while|switch|try|catch)\b', content, re.IGNORECASE))
+        # Count control structures (case-insensitive)
+        control_patterns = r'\b(if|for|while|switch|try|catch)\b'
+        complexity += len(re.findall(control_patterns, content, re.IGNORECASE))
         
-        # Count brackets (nested structures)
-        complexity += content.count('{') // 3  # Rough estimate
+        # Estimate structural complexity from brackets
+        complexity += content.count('{') // ScoringThresholds.BRACKETS_PER_POINT
         
-        # Line count penalty
+        # File size penalties
         lines = len(content.splitlines())
-        if lines > 100:
-            complexity += 5
-        elif lines > 50:
-            complexity += 2
+        if lines > ScoringThresholds.LARGE_FILE_THRESHOLD:
+            complexity += ScoringThresholds.LARGE_FILE_PENALTY
+        elif lines > ScoringThresholds.MEDIUM_FILE_THRESHOLD:
+            complexity += ScoringThresholds.MEDIUM_FILE_PENALTY
         
         return complexity
     

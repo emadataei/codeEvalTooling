@@ -1,109 +1,232 @@
-# Cognitive Score Calculation for PR Tiers
+# Cognitive Complexity Analyzer - Scoring System Documentation
 
 ## Overview
 
-Cognitive score determines the mental effort required to understand and safely approve a code change. This score automatically assigns PR tiers based on complexity, impact, and comprehension difficulty.
+The cognitive analyzer evaluates Pull Requests using a multi-dimensional scoring system to determine the appropriate review tier and automation level. The total score combines three main components plus optional quality penalties to assess the mental effort required to safely review and approve code changes.
 
 ## Scoring Components
 
-### 1. Static Code Analysis Score (0-40 points)
-- **Cyclomatic Complexity**: McCabe complexity per function
-- **Nesting Depth**: Max indentation levels
-- **Function Length**: Lines per function
-- **Dependency Coupling**: Cross-module dependencies
-- **Code Duplication**: Repeated patterns
+### 1. Static Score (0-40 points)
+Measures code complexity through static analysis using language-specific analysis techniques.
 
-### 2. Impact Surface Score (0-30 points)
-- **File Types**: Database schemas (+10), APIs (+8), configs (+6), tests (+2)
-- **Blast Radius**: Number of dependent modules/services
-- **External Integrations**: Third-party APIs, payment systems
-- **Security Boundaries**: Authentication, authorization changes
+**Analysis Methods:**
+- **Python**: AST-based analysis with nesting calculations
+- **JavaScript/TypeScript**: Pattern matching for control structures and async patterns
+- **Generic Languages**: Control structure counting and bracket analysis
 
-### 3. AI Complexity Score (0-30 points)
-- **Generation Confidence**: AI model uncertainty scores
-- **Pattern Recognition**: How well code matches known patterns
-- **Logic Density**: Complex business rules vs simple CRUD
-- **Novel Implementations**: New algorithms or approaches
+**Scoring Breakdown:**
+- Control structures (if/for/while/with): **+1 point each**
+- Nesting depth: **+1 point per level beyond first**
+- Function length penalties:
+  - Functions > 50 lines: **+3 points**
+  - Functions > 20 lines: **+1 point**
+- File size penalties (generic analysis):
+  - Files > 100 lines: **+5 points**
+  - Files > 50 lines: **+2 points**
+
+### 2. Impact Score (0-30 points)
+Measures blast radius and change impact based on file types, dependencies, and external integrations.
+
+**File Type Weights:**
+- Migration files: **+10 points**
+- Schema changes: **+10 points**
+- Payment systems: **+9 points**
+- API changes: **+8 points**
+- Security files: **+8 points**
+- Config files: **+6 points**
+- Test files: **+2 points**
+- Documentation: **+1 point**
+
+**Dependencies:**
+- Import statements: **+1 point per 5 imports** (max +5)
+
+**External Integrations:**
+- Database/API keywords: **+3 points**
+- Detected keywords: `database`, `db.`, `api.`, `fetch(`, `axios`
+
+### 3. AI Score (0-30 points)
+AI-powered assessment of cognitive load and comprehension difficulty.
+
+**AI Analysis (when available):**
+- Uses Azure AI Foundry to evaluate comprehension difficulty
+- Assesses business rule complexity
+- Detects unusual patterns or anti-patterns
+- Evaluates required domain knowledge
+
+**Heuristic Fallback Scoring:**
+- **Complex patterns (+5 points each):**
+  - `algorithm`, `recursive`, `optimization`, `performance`
+  - `threading`, `async`, `promise`, `callback`
+
+- **Business logic (+3 points each):**
+  - `pricing`, `payment`, `billing`, `discount`, `tax`
+  - `inventory`, `order`, `subscription`
+
+- **Data structures (+2 points each):**
+  - `nested`, `recursive`, `tree`, `graph`, `matrix`
+
+### 4. Quality Penalty (0-50+ points)
+Additional penalties applied for code quality issues, security vulnerabilities, performance regressions, and test coverage drops.
+
+## Total Score Calculation
+
+```
+TOTAL SCORE = Static Score + Impact Score + AI Score + Quality Penalty
+Range: 0-150+ points
+```
 
 ## Tier Assignment
 
-| Cognitive Score | Tier | Auto-Actions |
-|----------------|------|--------------|
-| **0-25** | Tier 0 | Auto-merge on CI green |
-| **26-65** | Tier 1 | Single reviewer, 12h SLA |
-| **66-100** | Tier 2 | Domain expert review, 48h SLA |
+| Total Score | Tier | Review Type | Description |
+|-------------|------|-------------|-------------|
+| **≤ 35** | **Tier 0** | Auto-merge | Automated merge on CI success, no human review required |
+| **36-65** | **Tier 1** | Standard Review | Standard peer review required, 1-2 reviewers needed |
+| **66+** | **Tier 2** | Expert Review | Senior/expert review required, domain expertise needed |
 
-## 🤖 AI Analysis Pipeline
+## Language-Specific Analysis
 
-### Pre-Analysis Checks
-```yaml
-static_analysis:
-  - ESLint/Pylint complexity rules
-  - SonarQube cognitive complexity
-  - Dependency graph analysis
-  - Security scanning (CodeQL, Semgrep)
+### Python Analysis
+- **AST parsing** for accurate complexity measurement
+- **Control structure counting** (if/for/while/with statements)
+- **Nesting depth calculation** through AST traversal
+- **Function length penalties** based on line count
+- **Fallback** to generic analysis if AST parsing fails
 
-ai_analysis:
-  - Code comprehension difficulty (GPT-4 analysis)
-  - Business logic complexity assessment
-  - Anti-pattern detection
-  - Documentation quality score
+### JavaScript/TypeScript Analysis
+- **Control structures:** +1 each (if/for/while/switch/try/catch)
+- **Functions:** +1 each (function declarations and arrow functions)
+- **Async patterns:** +1 each (.then/.catch/callback calls)
+
+### Generic Language Analysis
+- **Control structures:** Case-insensitive pattern matching
+- **Structural complexity:** Bracket counting for nesting estimation
+- **File size penalties:** Based on line count thresholds
+
+## Scoring Examples
+
+### Simple Utility Function
+```python
+def format_currency(amount: float, currency_code: str = "USD") -> str:
+    currency_symbols = {"USD": "$", "EUR": "€", "GBP": "£", "JPY": "¥"}
+    symbol = currency_symbols.get(currency_code, currency_code)
+    return f"{symbol}{amount:,.2f}"
 ```
+**Scoring:**
+- Static: **0** (no control structures, simple logic)
+- Impact: **2** (utility file)
+- AI: **0** (simple formatting)
+- **Total: 2 → Tier 0 (Auto-merge)**
 
-### Real-time Scoring
-1. **Parse PR diff** → Extract changed files and lines
-2. **Run static analysis** → Get complexity metrics
-3. **AI code review** → Assess comprehension difficulty
-4. **Calculate impact** → Analyze affected systems
-5. **Generate score** → Weighted sum of all components
-6. **Auto-tag PR** → Apply tier labels and assign reviewers
-
-## Example Scoring
-
-```javascript
-// Example: Simple utility function
-function formatCurrency(amount) {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD'
-  }).format(amount);
-}
+### Standard Feature Implementation
+```python
+def validate_user_input(data: dict) -> dict:
+    errors = []
+    if not data.get('email'):
+        errors.append("Email required")
+    if len(data.get('password', '')) < 8:
+        errors.append("Password too short")
+    return {"valid": len(errors) == 0, "errors": errors}
 ```
-**Score: 8** (Tier 0)
-- Static: Low complexity (5)
-- Impact: Utility function (2)
-- AI: Standard pattern (1)
+**Scoring:**
+- Static: **15** (multiple if statements, moderate complexity)
+- Impact: **8** (API/validation changes)
+- AI: **10** (moderate business logic)
+- **Total: 33 → Tier 0 (Auto-merge)**
 
-```javascript
-// Example: Complex business logic
-async function calculateDynamicPricing(user, product, marketConditions) {
-  const basePrice = await getProductPrice(product.id);
-  const userTier = await getUserPricingTier(user.id);
-  const demandMultiplier = calculateDemandMultiplier(marketConditions);
-  
-  if (user.subscriptionType === 'premium') {
-    return applyPremiumDiscount(basePrice * demandMultiplier, userTier);
-  }
-  
-  return applyStandardPricing(basePrice, demandMultiplier, userTier);
-}
+### Complex Algorithm
+```python
+def calculate_dynamic_pricing(user, product, market_conditions):
+    base_price = get_product_price(product.id)
+    
+    for condition in market_conditions:
+        if condition.type == 'demand':
+            if condition.level > 0.8:
+                base_price *= 1.2
+            elif condition.level < 0.3:
+                base_price *= 0.9
+                
+        if condition.type == 'competition':
+            competitor_prices = get_competitor_prices(product.category)
+            if base_price > max(competitor_prices):
+                base_price = max(competitor_prices) * 0.95
+                
+    return apply_user_discount(base_price, user.tier)
 ```
-**Score: 72** (Tier 2)
-- Static: Multiple async calls, branching (25)
-- Impact: Pricing logic affects revenue (22)
-- AI: Business-critical algorithm (25)
+**Scoring:**
+- Static: **25** (nested loops, multiple conditions, complex logic)
+- Impact: **12** (pricing affects multiple systems)
+- AI: **20** (algorithmic complexity, business rules)
+- **Total: 57 → Tier 1 (Standard Review)**
+
+### Critical System Change
+```python
+async def process_payment_with_fraud_detection(payment_data):
+    # Complex payment processing with multiple integrations
+    fraud_score = await fraud_detection_service.analyze(payment_data)
+    
+    if fraud_score > FRAUD_THRESHOLD:
+        await audit_service.log_suspicious_activity(payment_data)
+        raise FraudDetectionError("Transaction flagged")
+        
+    payment_method = await payment_gateway.validate_method(payment_data)
+    
+    try:
+        result = await payment_gateway.process_payment(payment_data)
+        await update_user_balance(payment_data.user_id, result.amount)
+        await notification_service.send_receipt(payment_data.user_id)
+        return result
+    except PaymentError as e:
+        await audit_service.log_payment_failure(payment_data, str(e))
+        raise
+```
+**Scoring:**
+- Static: **30** (async patterns, error handling, complex flow)
+- Impact: **18** (payment system, security, multiple integrations)
+- AI: **25** (critical business logic, requires domain expertise)
+- **Total: 73 → Tier 2 (Expert Review)**
+
+## Configuration Constants
+
+The scoring system uses configurable thresholds defined in `ScoringThresholds` class:
+
+```python
+# Score Caps
+STATIC_SCORE_MAX = 40
+IMPACT_SCORE_MAX = 30
+AI_SCORE_MAX = 30
+
+# Tier Thresholds
+TIER_0_THRESHOLD = 35  # Auto-merge
+TIER_1_THRESHOLD = 65  # Standard review
+
+# Static Scoring
+CONTROL_STRUCTURE_POINTS = 1
+FUNCTION_LENGTH_LARGE_PENALTY = 3  # >50 lines
+FUNCTION_LENGTH_MEDIUM_PENALTY = 1  # >20 lines
+
+# Impact Scoring
+IMPORTS_PER_POINT = 5  # 1 point per 5 imports
+DATABASE_API_POINTS = 3
+
+# AI Scoring (Heuristic)
+COMPLEX_PATTERN_POINTS = 5
+BUSINESS_LOGIC_POINTS = 3
+DATA_STRUCTURE_POINTS = 2
+```
 
 ## Integration Points
 
-- **GitHub Actions**: Auto-scoring on PR creation
-- **SonarQube**: Static analysis integration
-- **Azure OpenAI / AI Foundry**: Code comprehension analysis
-- **PR Templates**: Manual complexity hints from developers
-- **Slack/Teams**: Notification routing based on tiers
+- **GitHub Actions**: Automatic scoring on PR creation/updates
+- **Azure AI Foundry**: AI-powered complexity assessment
+- **SonarQube**: Code quality integration and penalties
+- **PR Automation**: Automatic labeling and reviewer assignment
+- **Quality Gates**: Integration with build pipeline decisions
 
 ## Continuous Improvement
 
-- **Feedback Loop**: Track review time vs predicted complexity
-- **Model Tuning**: Adjust weights based on actual review outcomes
-- **Pattern Learning**: Build corpus of complexity examples
-- **Team Calibration**: Regular scoring accuracy reviews
+The scoring system is designed for continuous refinement:
+
+- **Feedback Collection**: Track actual review time vs. predicted complexity
+- **Threshold Tuning**: Adjust scoring weights based on team feedback
+- **Pattern Recognition**: Expand keyword patterns and complexity indicators
+- **Team Calibration**: Regular reviews of scoring accuracy and tier assignments
