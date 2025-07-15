@@ -10,7 +10,8 @@ from src.utils.validation_utils import (
     calculate_age,
     sanitize_user_input,
     validate_password_strength,
-    parse_csv_line
+    parse_csv_line,
+    validate_user_profile
 )
 
 
@@ -187,3 +188,167 @@ class TestCSVParsing:
         """Test parsing empty CSV line."""
         result = parse_csv_line("")
         assert result == []
+
+
+class TestUserProfileValidation:
+    """Test user profile validation functionality."""
+    
+    def test_valid_user_profile(self):
+        """Test validation of a completely valid user profile."""
+        profile = {
+            'email': 'user@example.com',
+            'phone': '+1-555-123-4567',
+            'age': 25,
+            'username': 'validuser123',
+            'first_name': 'John',
+            'last_name': 'Doe'
+        }
+        result = validate_user_profile(profile)
+        assert result['valid'] is True
+        assert result['score'] == 100
+        assert len(result['errors']) == 0
+    
+    def test_invalid_email(self):
+        """Test profile with invalid email."""
+        profile = {
+            'email': 'invalid-email',
+            'phone': '+1-555-123-4567',
+            'age': 25,
+            'username': 'validuser123',
+            'first_name': 'John',
+            'last_name': 'Doe'
+        }
+        result = validate_user_profile(profile)
+        assert result['valid'] is False
+        assert 'Invalid email format' in result['errors']
+        assert result['score'] < 100
+    
+    def test_invalid_phone(self):
+        """Test profile with invalid phone number."""
+        profile = {
+            'email': 'user@example.com',
+            'phone': 'invalid-phone',
+            'age': 25,
+            'username': 'validuser123',
+            'first_name': 'John',
+            'last_name': 'Doe'
+        }
+        result = validate_user_profile(profile)
+        assert result['valid'] is False
+        assert result['score'] < 100
+    
+    def test_invalid_age_too_young(self):
+        """Test profile with age too young."""
+        profile = {
+            'email': 'user@example.com',
+            'phone': '+1-555-123-4567',
+            'age': 12,
+            'username': 'validuser123',
+            'first_name': 'John',
+            'last_name': 'Doe'
+        }
+        result = validate_user_profile(profile)
+        assert result['valid'] is False
+        assert 'Age must be between 13 and 120' in result['errors']
+        assert result['score'] < 100
+    
+    def test_invalid_age_too_old(self):
+        """Test profile with age too old."""
+        profile = {
+            'email': 'user@example.com',
+            'phone': '+1-555-123-4567',
+            'age': 150,
+            'username': 'validuser123',
+            'first_name': 'John',
+            'last_name': 'Doe'
+        }
+        result = validate_user_profile(profile)
+        assert result['valid'] is False
+        assert 'Age must be between 13 and 120' in result['errors']
+        assert result['score'] < 100
+    
+    def test_invalid_username_too_short(self):
+        """Test profile with username too short."""
+        profile = {
+            'email': 'user@example.com',
+            'phone': '+1-555-123-4567',
+            'age': 25,
+            'username': 'ab',
+            'first_name': 'John',
+            'last_name': 'Doe'
+        }
+        result = validate_user_profile(profile)
+        assert result['valid'] is False
+        assert 'Username must be 3-20 characters' in result['errors']
+        assert result['score'] < 100
+    
+    def test_invalid_username_too_long(self):
+        """Test profile with username too long."""
+        profile = {
+            'email': 'user@example.com',
+            'phone': '+1-555-123-4567',
+            'age': 25,
+            'username': 'a' * 25,
+            'first_name': 'John',
+            'last_name': 'Doe'
+        }
+        result = validate_user_profile(profile)
+        assert result['valid'] is False
+        assert 'Username must be 3-20 characters' in result['errors']
+        assert result['score'] < 100
+    
+    def test_invalid_username_special_chars(self):
+        """Test profile with username containing invalid characters."""
+        profile = {
+            'email': 'user@example.com',
+            'phone': '+1-555-123-4567',
+            'age': 25,
+            'username': 'user@name!',
+            'first_name': 'John',
+            'last_name': 'Doe'
+        }
+        result = validate_user_profile(profile)
+        assert result['valid'] is False
+        assert 'Username can only contain letters, numbers, and underscores' in result['errors']
+        assert result['score'] < 100
+    
+    def test_multiple_validation_errors(self):
+        """Test profile with multiple validation errors."""
+        profile = {
+            'email': 'invalid-email',
+            'phone': 'invalid-phone',
+            'age': 10,
+            'username': 'ab'
+        }
+        result = validate_user_profile(profile)
+        assert result['valid'] is False
+        assert len(result['errors']) >= 2
+        assert result['score'] < 50
+    
+    def test_missing_fields(self):
+        """Test profile with missing required fields."""
+        profile = {
+            'email': 'user@example.com'
+        }
+        result = validate_user_profile(profile)
+        assert result['valid'] is False
+        assert len(result['errors']) > 0
+    
+    def test_edge_case_ages(self):
+        """Test edge case ages."""
+        # Test minimum valid age
+        profile = {
+            'email': 'user@example.com',
+            'phone': '+1-555-123-4567',
+            'age': 13,
+            'username': 'validuser123',
+            'first_name': 'John',
+            'last_name': 'Doe'
+        }
+        result = validate_user_profile(profile)
+        assert result['valid'] is True
+        
+        # Test maximum valid age
+        profile['age'] = 120
+        result = validate_user_profile(profile)
+        assert result['valid'] is True

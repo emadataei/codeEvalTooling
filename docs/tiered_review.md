@@ -2,11 +2,13 @@
 
 ## Hypothesis
 
-> In the modern world of AI-assisted development, **code generation is fast and easy**. However, **human comprehension of that code is the bottleneck**. To sustain quality and velocity, human review effort must be allocated based on **risk, impact, and clarity** — not volume.
+> In the AI era, code generation is no longer the bottleneck — human comprehension is.
+To sustain velocity and quality at scale, we must minimize unnecessary human review effort by aligning review depth with code risk, clarity, and impact.
+A tiered review model, combined with AI-assisted code analysis and structured tagging, enables us to triage changes efficiently, focus human review only where it matters most, and reduce the code-to-approval cycle time without compromising software integrity.
 
 ---
 
-## 🚦 Tiered Code Review Framework
+##  Tiered Code Review Framework
 
 We use a **tiered code review system** to manage the high volume of AI-generated code, reduce code-to-merge time, and maintain engineering quality.
 
@@ -32,9 +34,9 @@ We use a **tiered code review system** to manage the high volume of AI-generated
 
 ## 🛠 Tooling & Automation
 
-- ✅ **CI Enforced Checks**: Lint, type safety, tests (Tier 0)
-- 🤖 **AI Classification**: PRs must declare if AI-generated
-- 📝 **Structured PR Template**: Captures purpose, test strategy, AI rationale
+-  **CI Enforced Checks**: Lint, type safety, tests (Tier 0)
+-  **AI Classification**: PRs must declare if AI-generated
+-  **Structured PR Template**: Captures purpose, test strategy, AI rationale
 - 🏷 **PR Labeling**: Automatically assigned via GitHub Actions (`tier:0-auto`, `tier:1-quick`, `tier:2-deep`)
 - ⏱ **Review SLAs**:
   - Tier 0: Merge on green
@@ -43,16 +45,16 @@ We use a **tiered code review system** to manage the high volume of AI-generated
 
 ---
 
-## 📈 Philosophy
+##  Philosophy
 
-- 🧠 **Code clarity > cleverness**  
-- ⚖️ **Comprehension scales with risk, not volume**  
-- 💬 **AI should explain itself** — every agentic change must come with intent and rationale  
-- 🧪 **Automate what’s predictable, review what’s impactful**  
+-  **Code clarity > cleverness**  
+-  **Comprehension scales with risk, not volume**  
+-  **AI should explain itself** — every agentic change must come with intent and rationale  
+-  **Automate what’s predictable, review what’s impactful**  
 
 ---
 
-## 📚 Related
+##  Related
 
 - `REVIEW_GUIDELINES.md`: In-depth examples and edge case policies
 - `PR_TEMPLATE.md`: Standard format to ensure clarity and tier classification
