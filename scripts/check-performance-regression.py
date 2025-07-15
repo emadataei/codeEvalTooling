@@ -20,7 +20,7 @@ def load_current_metrics(filepath):
                     try:
                         metrics.append(json.loads(line))
                     except json.JSONDecodeError as e:
-                    print(f"WARNING: Skipping malformed JSON on line {line_num}: {e}")
+                        print(f"WARNING: Skipping malformed JSON on line {line_num}: {e}")
                         print(f"   Line content: {line[:100]}...")
                         continue
     return metrics

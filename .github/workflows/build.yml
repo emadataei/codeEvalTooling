@@ -4,14 +4,210 @@ on:
     branches:
       - master
       - main
-      - eataei/worlkflowSetup
   pull_request:
     types: [opened, synchronize, reopened]
 
 jobs:
+  quality-gate:
+    name: Quality Gate Analysis
+    runs-on: ubuntu-latest
+    outputs:
+      quality-passed: ${{ steps.quality-check.outputs.passed }}
+      quality-score: ${{ steps.quality-check.outputs.score }}
+      quality-penalty: ${{ steps.quality-check.outputs.penalty }}
+      blocking-issues: ${{ steps.quality-check.outputs.blocking_issues }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v41
+        with:
+          files: |
+            **/*.py
+            **/*.js
+            **/*.ts
+            **/*.jsx
+            **/*.tsx
+            **/*.java
+            **/*.cs
+            **/*.go
+            **/*.rs
+          files_ignore: |
+            **/*.md
+            **/*.txt
+            **/*.yml
+            **/*.yaml
+            **/*.json
+            **/Dockerfile
+      
+      - name: Run Quality Gate Analysis
+        id: quality-check
+        run: |
+          echo "Running Quality Gate Analysis..."
+          python scripts/run_quality_gate.py
+        env:
+          CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+      
+      - name: Add Quality Gate Summary to PR
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            console.log('=== Quality Gate PR Comment Debug ===');
+            console.log('Event name:', context.eventName);
+            console.log('Event type:', context.payload.action);
+            console.log('Has issue context:', !!context.issue);
+            console.log('Has PR context:', !!context.payload.pull_request);
+            
+            // Get PR number from different possible locations
+            const prNumber = context.issue?.number || 
+                           context.payload?.pull_request?.number || 
+                           context.payload?.number;
+            
+            console.log('Detected PR number:', prNumber);
+            
+            // Check if this is a PR context
+            if (!prNumber) {
+              console.log('No PR number found, skipping comment');
+              console.log('Available context keys:', Object.keys(context));
+              if (context.payload) {
+                console.log('Payload keys:', Object.keys(context.payload));
+              }
+              return;
+            }
+            
+            console.log('Attempting to read quality-gate-results.json...');
+            let results = { passed: false, score: 0, summary: 'Failed to load results' };
+            try {
+              results = JSON.parse(fs.readFileSync('quality-gate-results.json', 'utf8'));
+              console.log('Quality gate results loaded successfully:', Object.keys(results));
+            } catch (error) {
+              console.log('Could not read quality gate results:', error.message);
+              return;
+            }
+            
+            const passed = results.passed;
+            const score = results.score;
+            const icon = passed ? 'PASS' : 'FAIL';
+            const status = passed ? 'PASSED' : 'FAILED';
+            
+            let comment = `## ${icon} GitHub Actions Quality Gate ${status}\n\n`;
+            comment += `**Score:** ${score}/100\n`;
+            comment += `**Summary:** ${results.summary}\n\n`;
+            
+            if (results.issues && results.issues.blocking && results.issues.blocking.length > 0) {
+              comment += `### BLOCKING Issues (Must Fix)\n\n`;
+              results.issues.blocking.forEach(issue => {
+                comment += `- **${issue.category}**: ${issue.message}\n`;
+                if (issue.file !== 'PR') {
+                  comment += `  - Location: \`${issue.file}:${issue.line}\`\n`;
+                }
+                if (issue.suggestion) {
+                  comment += `  - Suggestion: ${issue.suggestion}\n`;
+                }
+                comment += '\n';
+              });
+            }
+            
+            if (results.issues && results.issues.warning && results.issues.warning.length > 0) {
+              comment += `### Warnings\n\n`;
+              results.issues.warning.slice(0, 5).forEach(issue => {
+                comment += `- **${issue.category}**: ${issue.message}\n`;
+                if (issue.file !== 'PR') {
+                  comment += `  - Location: \`${issue.file}:${issue.line}\`\n`;
+                }
+                comment += '\n';
+              });
+              if (results.issues.warning.length > 5) {
+                comment += `... and ${results.issues.warning.length - 5} more warnings\n\n`;
+              }
+            }
+            
+            if (passed) {
+              comment += `\n**Ready for Cognitive Analysis** - Proceeding to next review stage.\n`;
+            } else {
+              comment += `\n**Cognitive Analysis Blocked** - Fix blocking issues before proceeding.\n`;
+            }
+            
+            console.log('Creating PR comment with content length:', comment.length);
+            console.log('Comment preview (first 100 chars):', comment.substring(0, 100));
+            
+            try {
+              // Find existing GitHub Actions quality gate comment (not SonarCloud)
+              console.log('Looking for existing GitHub Actions Quality Gate comments...');
+              const { data: comments } = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+              });
+              
+              console.log(`Found ${comments.length} total comments on PR`);
+              
+              // Look for our specific GitHub Actions quality gate comment
+              const existingComment = comments.find(comment => 
+                comment.body.includes('<!-- GITHUB_ACTIONS_QUALITY_GATE -->') ||
+                (comment.body.includes('Quality Gate') && comment.user.login === 'github-actions[bot]')
+              );
+              
+              // Add our unique identifier to the comment
+              const commentWithId = `<!-- GITHUB_ACTIONS_QUALITY_GATE -->\n${comment}`;
+              
+              if (existingComment) {
+                console.log('Updating existing GitHub Actions Quality Gate comment ID:', existingComment.id);
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: existingComment.id,
+                  body: commentWithId
+                });
+                console.log('Successfully updated existing GitHub Actions comment');
+              } else {
+                console.log('Creating new GitHub Actions Quality Gate comment...');
+                const result = await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  body: commentWithId
+                });
+                console.log('Successfully created new GitHub Actions comment with ID:', result.data.id);
+              }
+            } catch (error) {
+              console.error('Error posting/updating GitHub Actions comment:', error);
+              console.error('Error details:', error.message);
+              if (error.response) {
+                console.error('Response status:', error.response.status);
+                console.error('Response data:', error.response.data);
+              }
+            }
+      
+      - name: Upload Quality Gate Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-gate-results
+          path: quality-gate-results.json
+        if: always()
+
   sonarqube:
     name: SonarQube
     runs-on: ubuntu-latest
+    needs: quality-gate
+    # Continue even if quality gate has warnings, but not if it fails completely
+    if: always() && (needs.quality-gate.outputs.quality-passed == 'true' || needs.quality-gate.outputs.blocking-issues == '0')
     steps:
       - uses: actions/checkout@v4
         with:
@@ -52,6 +248,9 @@ jobs:
   codeql:
     name: CodeQL Analysis
     runs-on: ubuntu-latest
+    needs: quality-gate
+    # Continue even if quality gate has warnings, but not if it fails completely
+    if: always() && (needs.quality-gate.outputs.quality-passed == 'true' || needs.quality-gate.outputs.blocking-issues == '0')
     permissions:
       actions: read
       contents: read
@@ -106,6 +305,9 @@ jobs:
   semgrep:
     name: Semgrep Analysis
     runs-on: ubuntu-latest
+    needs: quality-gate
+    # Continue even if quality gate has warnings, but not if it fails completely  
+    if: always() && (needs.quality-gate.outputs.quality-passed == 'true' || needs.quality-gate.outputs.blocking-issues == '0')
     steps:
       - uses: actions/checkout@v4
       
@@ -156,6 +358,9 @@ jobs:
   snyk:
     name: Snyk Security Analysis
     runs-on: ubuntu-latest
+    needs: quality-gate
+    # Continue even if quality gate has warnings, but not if it fails completely
+    if: always() && (needs.quality-gate.outputs.quality-passed == 'true' || needs.quality-gate.outputs.blocking-issues == '0')
     steps:
       - uses: actions/checkout@v4
       
@@ -271,10 +476,168 @@ jobs:
           path: snyk-code-results.json
         if: always()
 
+  cognitive-scoring:
+    name: Cognitive Complexity Analysis
+    runs-on: ubuntu-latest
+    needs: quality-gate
+    if: needs.quality-gate.outputs.quality-passed == 'true'
+    outputs:
+      tier: ${{ steps.cognitive-analysis.outputs.tier }}
+      total-score: ${{ steps.cognitive-analysis.outputs.total_score }}
+      reasoning: ${{ steps.cognitive-analysis.outputs.reasoning }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Download Quality Gate Results
+        uses: actions/download-artifact@v4
+        with:
+          name: quality-gate-results
+      
+      - name: Get changed files for cognitive analysis
+        id: changed-files
+        uses: tj-actions/changed-files@v41
+        with:
+          files: |
+            **/*.py
+            **/*.js
+            **/*.ts
+            **/*.jsx
+            **/*.tsx
+            **/*.java
+            **/*.cs
+            **/*.go
+            **/*.rs
+      
+      - name: Run Cognitive Analysis
+        id: cognitive-analysis
+        run: |
+          echo "Running Cognitive Complexity Analysis..."
+          python scripts/run_cognitive_analysis.py
+        env:
+          CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+          AI_FOUNDRY_ENDPOINT: ${{ secrets.AI_FOUNDRY_ENDPOINT }}
+          AI_FOUNDRY_TOKEN: ${{ secrets.AI_FOUNDRY_TOKEN }}
+          AI_FOUNDRY_MODEL: ${{ secrets.AI_FOUNDRY_MODEL }}
+      
+      - name: Add Cognitive Analysis Summary to PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            let results = { tier: 0, total_score: 0, reasoning: 'Failed to load results' };
+            try {
+              results = JSON.parse(fs.readFileSync('cognitive-analysis-results.json', 'utf8'));
+            } catch (error) {
+              console.log('Could not read cognitive analysis results:', error);
+            }
+            
+            const tier = results.tier;
+            const score = results.total_score;
+            
+            // Determine tier details
+            const tierInfo = {
+              0: { icon: 'TIER0', name: 'Tier 0', action: 'Auto-mergeable', color: 'green' },
+              1: { icon: 'TIER1', name: 'Tier 1', action: 'Light Review Required', color: 'yellow' },
+              2: { icon: 'TIER2', name: 'Tier 2', action: 'Deep Review Required', color: 'red' }
+            };
+            
+            const info = tierInfo[tier] || tierInfo[2];
+            
+            let comment = `## Cognitive Complexity Analysis\n\n`;
+            comment += `### ${info.icon} ${info.name} - ${info.action}\n\n`;
+            comment += `**Total Score:** ${score} points\n`;
+            comment += `**Reasoning:** ${results.reasoning}\n\n`;
+            
+            if (results.static_score !== undefined) {
+              comment += `### Score Breakdown\n`;
+              comment += `- **Static Analysis:** ${results.static_score}/40 points\n`;
+              comment += `- **Impact Surface:** ${results.impact_score}/30 points\n`;
+              comment += `- **AI Complexity:** ${results.ai_score}/30 points\n`;
+              if (results.quality_penalty > 0) {
+                comment += `- **Quality Penalty:** +${results.quality_penalty} points\n`;
+              }
+              comment += '\n';
+            }
+            
+            comment += `### Review Guidelines\n`;
+            if (tier === 0) {
+              comment += `- **Auto-merge eligible** (if all checks pass)\n`;
+              comment += `- No human review required\n`;
+              comment += `- Low complexity change\n`;
+            } else if (tier === 1) {
+              comment += `- **Single reviewer** required\n`;
+              comment += `- **12-hour SLA** for review\n`;
+              comment += `- Standard review process\n`;
+            } else {
+              comment += `- **Domain expert review** required\n`;
+              comment += `- **48-hour SLA** for review\n`;
+              comment += `- High complexity - careful review needed\n`;
+            }
+            
+            // Find existing cognitive analysis comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const existingComment = comments.find(comment => 
+              comment.body.includes('Cognitive Complexity Analysis')
+            );
+            
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body: comment
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: comment
+              });
+            }
+            
+            // Set PR labels based on tier
+            const labels = [`tier-${tier}`];
+            if (tier === 0) labels.push('auto-merge-candidate');
+            if (tier === 2) labels.push('needs-expert-review');
+            
+            await github.rest.issues.setLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: labels
+            });
+      
+      - name: Upload Cognitive Analysis Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: cognitive-analysis-results
+          path: cognitive-analysis-results.json
+        if: always()
+
   metrics-aggregation:
     name: Aggregate Performance Metrics
     runs-on: ubuntu-latest
-    needs: [sonarqube, codeql, semgrep, snyk]
+    needs: [quality-gate, cognitive-scoring, sonarqube, codeql, semgrep, snyk]
     if: always()
     steps:
       - uses: actions/checkout@v4
@@ -282,7 +645,7 @@ jobs:
       - name: Download all metrics artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: "*-metrics*"
+          pattern: "*-metrics* | *-results"
           merge-multiple: true
       
       - name: Debug - Show downloaded metrics
@@ -351,6 +714,48 @@ jobs:
         run: |
           echo "## 🔒 Security Analysis Report" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Add Quality Gate Summary
+          if [ -f quality-gate-results.json ]; then
+            echo "### Quality Gate Results" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            quality_passed=$(cat quality-gate-results.json | grep -o '"passed":[^,}]*' | cut -d':' -f2 | tr -d '"' || echo "unknown")
+            quality_score=$(cat quality-gate-results.json | grep -o '"score":[^,}]*' | cut -d':' -f2 | tr -d '"' || echo "unknown")
+            blocking_issues=$(cat quality-gate-results.json | grep -o '"blocking_issues":[^,}]*' | cut -d':' -f2 | tr -d '"' || echo "0")
+            
+            if [ "$quality_passed" = "true" ]; then
+              echo "| Status | Score | Blocking Issues |" >> $GITHUB_STEP_SUMMARY
+              echo "|--------|-------|-----------------|" >> $GITHUB_STEP_SUMMARY
+              echo "| PASSED | $quality_score/100 | $blocking_issues |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| Status | Score | Blocking Issues |" >> $GITHUB_STEP_SUMMARY
+              echo "|--------|-------|-----------------|" >> $GITHUB_STEP_SUMMARY
+              echo "| FAILED | $quality_score/100 | $blocking_issues |" >> $GITHUB_STEP_SUMMARY
+            fi
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Add Cognitive Analysis Summary
+          if [ -f cognitive-analysis-results.json ]; then
+            echo "### Cognitive Complexity Analysis" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            tier=$(cat cognitive-analysis-results.json | grep -o '"tier":[^,}]*' | cut -d':' -f2 | tr -d '"' || echo "unknown")
+            total_score=$(cat cognitive-analysis-results.json | grep -o '"total_score":[^,}]*' | cut -d':' -f2 | tr -d '"' || echo "unknown")
+            
+            case $tier in
+              0) tier_info="Tier 0 (Auto-mergeable)" ;;
+              1) tier_info="Tier 1 (Light Review)" ;;
+              2) tier_info="Tier 2 (Deep Review)" ;;
+              *) tier_info="Unknown Tier" ;;
+            esac
+            
+            echo "| Tier | Total Score | Review Requirement |" >> $GITHUB_STEP_SUMMARY
+            echo "|------|-------------|-------------------|" >> $GITHUB_STEP_SUMMARY
+            echo "| $tier_info | $total_score points | See PR comments |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
           
           if [ -f performance-metrics.jsonl ]; then
             echo "### 🔒 Security Findings" >> $GITHUB_STEP_SUMMARY

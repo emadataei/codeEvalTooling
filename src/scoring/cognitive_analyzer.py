@@ -14,6 +14,7 @@ class CognitiveScore:
     total_score: int
     tier: int
     reasoning: str
+    quality_penalty: int = 0
 
 class CognitiveAnalyzer:
     def __init__(self):
@@ -32,15 +33,16 @@ class CognitiveAnalyzer:
         """Get the model deployment name"""
         return AIClientFactory.get_model_name()
     
-    def analyze_pr(self, pr_files: List[Dict]) -> CognitiveScore:
+    def analyze_pr(self, pr_files: List[Dict], quality_penalty: int = 0) -> CognitiveScore:
         """Main entry point for analyzing a PR's cognitive complexity"""
         static_score = self._calculate_static_score(pr_files)
         impact_score = self._calculate_impact_score(pr_files)
         ai_score = self._calculate_ai_score(pr_files)
         
-        total_score = static_score + impact_score + ai_score
+        # Add quality penalty to total score
+        total_score = static_score + impact_score + ai_score + quality_penalty
         tier = self._assign_tier(total_score)
-        reasoning = self._generate_reasoning(static_score, impact_score, ai_score)
+        reasoning = self._generate_reasoning(static_score, impact_score, ai_score, quality_penalty)
         
         return CognitiveScore(
             static_score=static_score,
@@ -48,7 +50,8 @@ class CognitiveAnalyzer:
             ai_score=ai_score,
             total_score=total_score,
             tier=tier,
-            reasoning=reasoning
+            reasoning=reasoning,
+            quality_penalty=quality_penalty
         )
     
     def _calculate_static_score(self, pr_files: List[Dict]) -> int:
@@ -262,7 +265,7 @@ class CognitiveAnalyzer:
         
         return count
     
-    def _generate_reasoning(self, static: int, impact: int, ai: int) -> str:
+    def _generate_reasoning(self, static: int, impact: int, ai: int, quality_penalty: int = 0) -> str:
         """Generate human-readable explanation of scoring"""
         reasons = []
         
@@ -272,6 +275,8 @@ class CognitiveAnalyzer:
             reasons.append(f"Significant impact surface ({impact}/30)")
         if ai > 20:
             reasons.append(f"AI flagged as complex ({ai}/30)")
+        if quality_penalty > 0:
+            reasons.append(f"Quality penalty applied (+{quality_penalty})")
             
         if not reasons:
             return "Low complexity change, suitable for automated review"
