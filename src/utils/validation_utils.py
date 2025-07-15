@@ -50,6 +50,28 @@ def format_phone_number(phone: str) -> Optional[str]:
     return f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
 
 
+def format_currency(amount: float, currency_code: str = "USD") -> str:
+    """
+    Format a monetary amount with currency symbol.
+    
+    Args:
+        amount: The monetary amount to format
+        currency_code: ISO currency code (default: USD)
+        
+    Returns:
+        str: Formatted currency string
+    """
+    currency_symbols = {
+        "USD": "$",
+        "EUR": "€", 
+        "GBP": "£",
+        "JPY": "¥"
+    }
+    
+    symbol = currency_symbols.get(currency_code, currency_code)
+    return f"{symbol}{amount:,.2f}"
+
+
 def calculate_age(birth_date: datetime.date) -> int:
     """
     Calculate age in years from birth date.
