@@ -22,42 +22,62 @@ module.exports = async ({ github, context }) => {
   const score = results.total_score;
   
   const tierInfo = {
-    0: { icon: 'TIER0', name: 'Tier 0', action: 'Auto-mergeable', color: 'green' },
-    1: { icon: 'TIER1', name: 'Tier 1', action: 'Light Review Required', color: 'yellow' },
-    2: { icon: 'TIER2', name: 'Tier 2', action: 'Deep Review Required', color: 'red' }
+    0: { name: 'Tier 0', action: 'Auto-Merge Eligible', description: 'Low complexity, minimal risk' },
+    1: { name: 'Tier 1', action: 'Standard Review Required', description: 'Moderate complexity, normal review process' },
+    2: { name: 'Tier 2', action: 'Expert Review Required', description: 'High complexity, requires domain expert' }
   };
   
   const info = tierInfo[tier] || tierInfo[2];
   
   let comment = `## Cognitive Complexity Analysis\n\n`;
-  comment += `### ${info.icon} ${info.name} - ${info.action}\n\n`;
-  comment += `**Total Score:** ${score} points\n`;
-  comment += `**Reasoning:** ${results.reasoning}\n\n`;
+  comment += `### ${info.name} - ${info.action}\n\n`;
+  comment += `**Complexity Score:** ${score} points (${info.description})\n\n`;
+  comment += `**Analysis Summary:** ${results.reasoning}\n\n`;
   
+  // Detailed score breakdown with explanations
   if (results.static_score !== undefined) {
-    comment += `### Score Breakdown\n`;
-    comment += `- **Static Analysis:** ${results.static_score}/40 points\n`;
-    comment += `- **Impact Surface:** ${results.impact_score}/30 points\n`;
-    comment += `- **AI Complexity:** ${results.ai_score}/30 points\n`;
+    comment += `### Complexity Breakdown\n\n`;
+    comment += `| Component | Score | Threshold | Status |\n`;
+    comment += `|-----------|-------|-----------|--------|\n`;
+    comment += `| Static Analysis | ${results.static_score}/40 | <20 for Tier 0 | ${results.static_score < 20 ? 'Low' : results.static_score < 30 ? 'Medium' : 'High'} |\n`;
+    comment += `| Impact Surface | ${results.impact_score}/30 | <15 for Tier 0 | ${results.impact_score < 15 ? 'Low' : results.impact_score < 25 ? 'Medium' : 'High'} |\n`;
+    comment += `| AI Complexity | ${results.ai_score}/30 | <15 for Tier 0 | ${results.ai_score < 15 ? 'Low' : results.ai_score < 25 ? 'Medium' : 'High'} |\n`;
     if (results.quality_penalty > 0) {
-      comment += `- **Quality Penalty:** +${results.quality_penalty} points\n`;
+      comment += `| Quality Penalty | +${results.quality_penalty} | N/A | Applied |\n`;
     }
-    comment += '\n';
+    comment += `\n`;
   }
   
-  comment += `### Review Guidelines\n`;
+  // Review guidelines with specific actions
+  comment += `### Review Process\n\n`;
+  
   if (tier === 0) {
-    comment += `- **Auto-merge eligible** (if all checks pass)\n`;
-    comment += `- No human review required\n`;
-    comment += `- Low complexity change\n`;
+    comment += `**Auto-Merge Candidate**\n`;
+    comment += `- This change is low-risk and can be merged automatically if all checks pass\n`;
+    comment += `- No human review required unless requested by the author\n`;
+    comment += `- Typical changes: documentation updates, minor bug fixes, configuration changes\n\n`;
+    comment += `**For Authors:** Ensure all automated checks pass before merging\n`;
+    comment += `**For Maintainers:** This PR is eligible for auto-merge workflows\n`;
   } else if (tier === 1) {
-    comment += `- **Single reviewer** required\n`;
-    comment += `- **12-hour SLA** for review\n`;
-    comment += `- Standard review process\n`;
+    comment += `**Standard Review Process**\n`;
+    comment += `- Requires approval from one team member before merge\n`;
+    comment += `- Target review time: 12 hours during business days\n`;
+    comment += `- Focus areas: code correctness, style adherence, basic logic review\n\n`;
+    comment += `**For Reviewers:**\n`;
+    comment += `- Review for obvious bugs and style issues\n`;
+    comment += `- Check that tests cover the main functionality\n`;
+    comment += `- Verify documentation is updated if needed\n`;
+    comment += `- Standard approval process applies\n`;
   } else {
-    comment += `- **Domain expert review** required\n`;
-    comment += `- **48-hour SLA** for review\n`;
-    comment += `- High complexity - careful review needed\n`;
+    comment += `**Expert Review Required**\n`;
+    comment += `- Requires approval from a domain expert or senior team member\n`;
+    comment += `- Target review time: 48 hours, may require additional time for complex changes\n`;
+    comment += `- Focus areas: architecture impact, performance implications, security considerations\n\n`;
+    comment += `**For Reviewers:**\n`;
+    comment += `- Conduct thorough code review focusing on business logic\n`;
+    comment += `- Consider architectural implications and future maintainability\n`;
+    comment += `- Verify comprehensive test coverage for complex scenarios\n`;
+    comment += `- May require multiple review rounds or team discussion\n`;
   }
   
   // Create or update the comment

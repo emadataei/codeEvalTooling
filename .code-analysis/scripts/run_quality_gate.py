@@ -90,8 +90,34 @@ def analyze_changed_files(file_list):
     quality_gate = QualityGate(enable_ai=enable_ai)
     result = quality_gate.analyze_pr(pr_files)
     
+    # Get standards information for enhanced reporting
+    standards_info = {}
+    if enable_ai:
+        try:
+            standards = quality_gate.copilot_parser.get_standards()
+            emphasis_areas = []
+            if standards.error_handling_required:
+                emphasis_areas.append('Error Handling')
+            if standards.type_safety_emphasis:
+                emphasis_areas.append('Type Safety')
+            if standards.performance_focus:
+                emphasis_areas.append('Performance')
+            if standards.documentation_required:
+                emphasis_areas.append('Documentation')
+            if standards.testing_emphasis:
+                emphasis_areas.append('Testing')
+            
+            standards_info = {
+                'standards_applied': True,
+                'emphasis_areas': emphasis_areas
+            }
+        except Exception:
+            standards_info = {'standards_applied': False}
+    else:
+        standards_info = {'standards_applied': False}
+    
     # Convert to format expected by GitHub Actions
-    return {
+    result_dict = {
         'passed': result.passed,
         'score': result.quality_score,
         'penalty': result.quality_penalty,
@@ -120,6 +146,11 @@ def analyze_changed_files(file_list):
             ]
         }
     }
+    
+    # Add standards information
+    result_dict.update(standards_info)
+    
+    return result_dict
 
 
 def main():
