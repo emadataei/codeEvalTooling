@@ -6,6 +6,7 @@ module.exports = async ({ github, context }) => {
   console.log('Event type:', context.payload.action);
   console.log('Has issue context:', !!context.issue);
   console.log('Has PR context:', !!context.payload.pull_request);
+  console.log('Starting cognitive analysis PR comment and label setting...');
   
   const prNumber = getPRNumber(context);
   console.log('Detected PR number:', prNumber);
@@ -117,5 +118,12 @@ module.exports = async ({ github, context }) => {
   if (tier === 0) labels.push('auto-merge-candidate');
   if (tier === 2) labels.push('needs-expert-review');
   
-  await setLabels(github, context, prNumber, labels);
+  console.log('Setting labels for tier', tier, ':', labels);
+  try {
+    await setLabels(github, context, prNumber, labels);
+    console.log('Successfully set labels:', labels);
+  } catch (error) {
+    console.error('Error setting labels:', error);
+    throw error;
+  }
 };
