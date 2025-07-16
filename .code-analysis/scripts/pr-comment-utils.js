@@ -14,14 +14,6 @@ function getPRNumber(context) {
                    context.payload?.pull_request?.number || 
                    context.payload?.number;
   
-  if (!prNumber) {
-    console.log('No PR number found in context');
-    console.log('Available context keys:', Object.keys(context));
-    if (context.payload) {
-      console.log('Payload keys:', Object.keys(context.payload));
-    }
-  }
-  
   return prNumber;
 }
 
@@ -77,21 +69,12 @@ async function createOrUpdateComment(github, context, prNumber, commentBody, ide
       );
     }
 
-    console.log(`Found ${comments.length} existing comments on PR`);
-    console.log(`Looking for comment ID: "${commentId || 'none'}"`);
-    console.log(`Looking for identifier: "${identifier}"`);
-    console.log(`Found existing comment: ${!!existingComment}`);
-    if (existingComment) {
-      console.log(`Existing comment ID: ${existingComment.id}`);
-    }
-
     // Add comment ID if provided (for GitHub Actions workflow tracking)
     const finalCommentBody = commentId ? 
       `${commentBody}\n\n<!-- comment-id: ${commentId} -->` : 
       commentBody;
 
     if (existingComment) {
-      console.log(`Updating existing comment containing "${identifier}"`);
       await github.rest.issues.updateComment({
         owner: context.repo.owner,
         repo: context.repo.repo,
@@ -100,22 +83,15 @@ async function createOrUpdateComment(github, context, prNumber, commentBody, ide
       });
       console.log('Successfully updated existing comment');
     } else {
-      console.log(`Creating new comment with identifier "${identifier}"`);
-      const result = await github.rest.issues.createComment({
+      await github.rest.issues.createComment({
         owner: context.repo.owner,
         repo: context.repo.repo,
         issue_number: prNumber,
         body: finalCommentBody
       });
-      console.log('Successfully created new comment with ID:', result.data.id);
     }
   } catch (error) {
     console.error('Error posting/updating comment:', error);
-    console.error('Error details:', error.message);
-    if (error.response) {
-      console.error('Response status:', error.response.status);
-      console.error('Response data:', error.response.data);
-    }
     throw error;
   }
 }
@@ -136,7 +112,6 @@ async function setLabels(github, context, prNumber, labels) {
       issue_number: prNumber,
       labels: labels
     });
-    console.log('Successfully set labels:', labels);
   } catch (error) {
     console.error('Error setting labels:', error);
     throw error;

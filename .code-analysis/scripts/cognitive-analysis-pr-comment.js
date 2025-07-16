@@ -1,32 +1,18 @@
 const { getPRNumber, loadResults, createOrUpdateComment } = require('./pr-comment-utils');
 
 module.exports = async ({ github, context }) => {
-  console.log('=== Cognitive Analysis PR Comment Debug ===');
-  console.log('Event name:', context.eventName);
-  console.log('Event type:', context.payload.action);
-  console.log('Has issue context:', !!context.issue);
-  console.log('Has PR context:', !!context.payload.pull_request);
-  console.log('Starting cognitive analysis PR comment and label setting...');
-  
   const prNumber = getPRNumber(context);
-  console.log('Detected PR number:', prNumber);
   
   if (!prNumber) {
     console.log('No PR number found, skipping comment');
     return;
   }
   
-  console.log('Attempting to read cognitive-analysis-results.json...');
   const results = loadResults('cognitive-analysis-results.json', { 
     tier: 0, 
     total_score: 0, 
     reasoning: 'Failed to load results' 
   });
-  
-  console.log('Loaded results:', results);
-  if (results.reasoning === 'Failed to load results') {
-    console.log('Failed to load cognitive analysis results, but will create comment anyway');
-  }
   
   const tier = results.tier;
   const score = results.total_score;
@@ -94,10 +80,6 @@ module.exports = async ({ github, context }) => {
   }
   
   // Create or update the comment
-  console.log('Creating or updating cognitive analysis comment...');
-  console.log('Comment content length:', comment.length);
-  console.log('First 200 chars of comment:', comment.substring(0, 200));
-  
   try {
     await createOrUpdateComment(
       github, 
@@ -107,11 +89,8 @@ module.exports = async ({ github, context }) => {
       'Cognitive Complexity Analysis',  // identifier to find existing comments
       'COGNITIVE_ANALYSIS_COMMENT'  // unique comment ID for reliable matching
     );
-    console.log('Successfully created or updated cognitive analysis comment');
   } catch (error) {
     console.error('Error creating or updating cognitive analysis comment:', error);
     throw error;
   }
-  
-  console.log('Cognitive analysis comment completed. Labels will be set by update_pr_metadata.py script.');
 };

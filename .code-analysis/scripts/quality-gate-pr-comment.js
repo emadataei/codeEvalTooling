@@ -1,31 +1,18 @@
 const { getPRNumber, loadResults, createOrUpdateComment } = require('./pr-comment-utils');
 
 module.exports = async ({ github, context }) => {
-  console.log('=== Quality Gate PR Comment Debug ===');
-  console.log('Event name:', context.eventName);
-  console.log('Event type:', context.payload.action);
-  console.log('Has issue context:', !!context.issue);
-  console.log('Has PR context:', !!context.payload.pull_request);
-  
   const prNumber = getPRNumber(context);
-  console.log('Detected PR number:', prNumber);
   
   if (!prNumber) {
     console.log('No PR number found, skipping comment');
     return;
   }
   
-  console.log('Attempting to read quality-gate-results.json...');
   const results = loadResults('quality-gate-results.json', { 
     passed: false, 
     score: 0, 
     summary: 'Failed to load results' 
   });
-  
-  console.log('Loaded results:', results);
-  if (results.summary === 'Failed to load results') {
-    console.log('Failed to load quality gate results, but will create comment anyway');
-  }
   
   const passed = results.passed;
   const score = results.score;
@@ -125,11 +112,7 @@ module.exports = async ({ github, context }) => {
     comment += `**Note:** Cognitive analysis will still run to provide complexity insights.\n`;
   }
   
-  console.log('Creating PR comment with content length:', comment.length);
-  console.log('Comment preview (first 100 chars):', comment.substring(0, 100));
-  
   // Create or update the comment using shared utility
-  console.log('Creating or updating quality gate comment...');
   try {
     await createOrUpdateComment(
       github, 
@@ -139,7 +122,6 @@ module.exports = async ({ github, context }) => {
       'Code Quality Gate',  // identifier to find existing comments (matches comment header)
       'QUALITY_GATE_COMMENT'  // unique comment ID for reliable matching
     );
-    console.log('Successfully created or updated quality gate comment');
   } catch (error) {
     console.error('Error creating or updating quality gate comment:', error);
     throw error;
