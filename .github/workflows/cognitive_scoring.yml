@@ -25,23 +25,45 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install azure-ai-inference==1.0.0b9 azure-identity PyGithub sonarqube-api pylint
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
       - name: Run Static Analysis
         run: |
           # Run linting and complexity analysis
           pylint --load-plugins=pylint.extensions.mccabe --reports=y .code-analysis/ || true
           
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v41
+        with:
+          files: |
+            **/*.py
+            **/*.js
+            **/*.ts
+            **/*.jsx
+            **/*.tsx
+            **/*.java
+            **/*.cs
+            **/*.go
+            **/*.rs
+          files_ignore: |
+            **/*.md
+            **/*.txt
+            **/*.yml
+            **/*.yaml
+            **/*.json
+            **/Dockerfile
+
       - name: Analyze PR Cognitive Complexity
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           AI_FOUNDRY_ENDPOINT: ${{ secrets.AI_FOUNDRY_ENDPOINT }}
           AI_FOUNDRY_MODEL: ${{ secrets.AI_FOUNDRY_MODEL }}
           AI_FOUNDRY_TOKEN: ${{ secrets.AI_FOUNDRY_TOKEN }}
+          CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
         run: |
-          python .code-analysis/scripts/analyze_pr.py \
-            --pr-number ${{ github.event.pull_request.number }} \
-            --repo ${{ github.repository }}
+          python .code-analysis/scripts/run_cognitive_analysis.py
 
       - name: Update PR Labels and Assignees
         env:
@@ -52,34 +74,9 @@ jobs:
             --pr-number ${{ github.event.pull_request.number }}
 
       - name: Post Cognitive Score Comment
-        uses: actions/github-script@v6
+        if: always()
+        uses: actions/github-script@v7
         with:
           script: |
-            const fs = require('fs');
-            if (fs.existsSync('cognitive_score.json')) {
-              const score = JSON.parse(fs.readFileSync('cognitive_score.json'));
-              
-              const comment = `## Cognitive Complexity Analysis
-              
-              **Total Score: ${score.total_score}/100** → **Tier ${score.tier}**
-              
-              | Component | Score | Details |
-              |-----------|-------|---------|
-              | Static Analysis | ${score.static_score}/40 | Code complexity, nesting, length |
-              | Impact Surface | ${score.impact_score}/30 | Files affected, blast radius |
-              | AI Assessment | ${score.ai_score}/30 | Comprehension difficulty |
-              
-              **AI Provider:** ${score.ai_provider || 'ai_foundry'}
-              **Reasoning:** ${score.reasoning}
-              
-              **Review Assignment:** ${score.tier === 0 ? 'Auto-merge on CI green' : 
-                                     score.tier === 1 ? 'Single reviewer (12h SLA)' : 
-                                     'Domain expert review (48h SLA)'}`;
-              
-              github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: comment
-              });
-            }
+            const script = require('./.code-analysis/scripts/cognitive-analysis-pr-comment.js');
+            return await script({ github, context });

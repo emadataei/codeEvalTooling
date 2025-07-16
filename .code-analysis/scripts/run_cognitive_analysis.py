@@ -158,6 +158,10 @@ def main():
     # Create detailed results file
     with open('cognitive-analysis-results.json', 'w') as f:
         json.dump(result, f, indent=2)
+    
+    # Also create the legacy filename for compatibility
+    with open('cognitive_score.json', 'w') as f:
+        json.dump(result, f, indent=2)
 
 
 if __name__ == '__main__':

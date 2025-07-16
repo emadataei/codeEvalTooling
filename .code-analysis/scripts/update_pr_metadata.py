@@ -34,12 +34,18 @@ def main():
         print("ERROR: GITHUB_TOKEN environment variable not set")
         sys.exit(1)
     
-    # Load cognitive score results
-    if not os.path.exists("cognitive_score.json"):
-        print("ERROR: cognitive_score.json not found. Run analyze_pr.py first.")
+    # Load cognitive score results (try both filenames)
+    score_file = None
+    for filename in ["cognitive_score.json", "cognitive-analysis-results.json"]:
+        if os.path.exists(filename):
+            score_file = filename
+            break
+    
+    if not score_file:
+        print("ERROR: cognitive analysis results not found. Run run_cognitive_analysis.py first.")
         sys.exit(1)
     
-    with open("cognitive_score.json", "r") as f:
+    with open(score_file, "r") as f:
         score_data = json.load(f)
     
     tier = score_data.get("tier", 1)
