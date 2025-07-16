@@ -22,9 +22,9 @@ module.exports = async ({ github, context }) => {
     summary: 'Failed to load results' 
   });
   
-  if (!results.passed && results.summary === 'Failed to load results') {
-    console.log('Failed to load results, skipping comment');
-    return;
+  console.log('Loaded results:', results);
+  if (results.summary === 'Failed to load results') {
+    console.log('Failed to load quality gate results, but will create comment anyway');
   }
   
   const passed = results.passed;
@@ -129,12 +129,19 @@ module.exports = async ({ github, context }) => {
   console.log('Comment preview (first 100 chars):', comment.substring(0, 100));
   
   // Create or update the comment using shared utility
-  await createOrUpdateComment(
-    github, 
-    context, 
-    prNumber, 
-    comment, 
-    'Code Quality Gate',  // identifier to find existing comments (matches comment header)
-    'QUALITY_GATE_COMMENT'  // unique comment ID for reliable matching
-  );
+  console.log('Creating or updating quality gate comment...');
+  try {
+    await createOrUpdateComment(
+      github, 
+      context, 
+      prNumber, 
+      comment, 
+      'Code Quality Gate',  // identifier to find existing comments (matches comment header)
+      'QUALITY_GATE_COMMENT'  // unique comment ID for reliable matching
+    );
+    console.log('Successfully created or updated quality gate comment');
+  } catch (error) {
+    console.error('Error creating or updating quality gate comment:', error);
+    throw error;
+  }
 };

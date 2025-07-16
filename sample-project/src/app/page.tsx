@@ -1,7 +1,7 @@
 // This file has intentional quality issues for testing
 // TODO: Added test comment to trigger change detection 
 // Additional comment to test quality gate comment updates
-// Debug: Testing cognitive analysis PR comment visibility (debug-3)
+// Debug: Testing both quality gate AND cognitive analysis PR comments (debug-4)
 import { useState } from 'react'
 
 // Missing interface definition - should trigger type safety warning
