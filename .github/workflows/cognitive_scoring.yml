@@ -43,10 +43,18 @@ jobs:
             **/*.ts
             **/*.jsx
             **/*.tsx
+            **/*.mjs
+            **/*.cjs
+            **/*.vue
+            **/*.svelte
             **/*.java
             **/*.cs
             **/*.go
             **/*.rs
+            sample-project/**/*.js
+            sample-project/**/*.ts
+            sample-project/**/*.jsx
+            sample-project/**/*.tsx
           files_ignore: |
             **/*.md
             **/*.txt
@@ -54,6 +62,9 @@ jobs:
             **/*.yaml
             **/*.json
             **/Dockerfile
+            **/node_modules/**
+            **/dist/**
+            **/build/**
 
       - name: Analyze PR Cognitive Complexity
         env:

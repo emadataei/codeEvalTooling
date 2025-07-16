@@ -41,10 +41,18 @@ jobs:
             **/*.ts
             **/*.jsx
             **/*.tsx
+            **/*.mjs
+            **/*.cjs
+            **/*.vue
+            **/*.svelte
             **/*.java
             **/*.cs
             **/*.go
             **/*.rs
+            sample-project/**/*.js
+            sample-project/**/*.ts
+            sample-project/**/*.jsx
+            sample-project/**/*.tsx
           files_ignore: |
             **/*.md
             **/*.txt
@@ -52,6 +60,19 @@ jobs:
             **/*.yaml
             **/*.json
             **/Dockerfile
+            **/node_modules/**
+            **/dist/**
+            **/build/**
+      
+      - name: Debug changed files
+        run: |
+          echo "=== Changed Files Debug ==="
+          echo "All changed files:"
+          echo "${{ steps.changed-files.outputs.all_changed_files }}"
+          echo "Number of changed files: ${{ steps.changed-files.outputs.all_changed_files_count }}"
+          echo "Changed files (space-separated):"
+          echo "${{ steps.changed-files.outputs.all_changed_files }}" | tr ' ' '\n'
+          echo "=== End Debug ==="
       
       - name: Run Quality Gate Analysis
         id: quality-check
