@@ -34,13 +34,16 @@ def analyze_changed_files(file_list):
     
     # Parse file list (GitHub Actions passes space-separated files)
     changed_files = [f.strip() for f in file_list.split() if f.strip()]
+    print(f"DEBUG: Parsed {len(changed_files)} files: {changed_files}")
     
     # Filter for code files and read content
     pr_files = []
     
     for file_path in changed_files:
         try:
+            print(f"DEBUG: Checking file: {file_path}")
             if not os.path.exists(file_path):
+                print(f"DEBUG: File does not exist: {file_path}")
                 continue
                 
             with open(file_path, 'r', encoding='utf-8') as f:
@@ -62,16 +65,19 @@ def analyze_changed_files(file_list):
             
             language = language_map.get(ext, 'unknown')
             
+            print(f"DEBUG: Added file {file_path} with language {language}")
             pr_files.append({
                 'path': file_path,
                 'content': content,
                 'language': language
             })
             
-        except Exception:
+        except Exception as e:
             # Skip files that can't be read
+            print(f"DEBUG: Error reading file {file_path}: {e}")
             continue
     
+    print(f"DEBUG: Total valid code files: {len(pr_files)}")
     if not pr_files:
         return {
             'passed': True,
@@ -160,6 +166,8 @@ def main():
     """Main entry point for GitHub Actions."""
     try:
         changed_files = os.getenv('CHANGED_FILES', '')
+        print(f"DEBUG: CHANGED_FILES env var: '{changed_files}'")
+        print(f"DEBUG: Working directory: {os.getcwd()}")
         result = analyze_changed_files(changed_files)
         
         # Set outputs for GitHub Actions
