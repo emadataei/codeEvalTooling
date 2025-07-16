@@ -95,66 +95,93 @@ def analyze_changed_files(file_list):
     # Set enable_ai=False to disable AI analysis for faster execution
     enable_ai = os.getenv('QUALITY_GATE_AI_ENABLED', 'true').lower() == 'true'
     
-    quality_gate = QualityGate(enable_ai=enable_ai)
+    print(f"DEBUG: AI enabled: {enable_ai}")
+    try:
+        quality_gate = QualityGate(enable_ai=enable_ai)
+        print("DEBUG: QualityGate initialized successfully")
+    except Exception as e:
+        print(f"DEBUG: Error initializing QualityGate: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
     
-    result = quality_gate.analyze_pr(pr_files)
+    try:
+        result = quality_gate.analyze_pr(pr_files)
+        print("DEBUG: Quality gate analysis completed successfully")
+        print(f"DEBUG: Result passed: {result.passed}, score: {result.quality_score}")
+    except Exception as e:
+        print(f"DEBUG: Error during quality gate analysis: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
     
     # Get standards information for enhanced reporting
     standards_info = {}
     if enable_ai:
-            try:
-                standards = quality_gate.copilot_parser.get_standards()
-                emphasis_areas = []
-                if standards.error_handling_required:
-                    emphasis_areas.append('Error Handling')
-                if standards.type_safety_emphasis:
-                    emphasis_areas.append('Type Safety')
-                if standards.performance_focus:
-                    emphasis_areas.append('Performance')
-                if standards.documentation_required:
-                    emphasis_areas.append('Documentation')
-                if standards.testing_emphasis:
-                    emphasis_areas.append('Testing')
-            
-                standards_info = {
-                    'standards_applied': True,
-                    'emphasis_areas': emphasis_areas
-                }
-            except Exception:
-                standards_info = {'standards_applied': False}
+        try:
+            print("DEBUG: Getting standards information...")
+            standards = quality_gate.copilot_parser.get_standards()
+            emphasis_areas = []
+            if standards.error_handling_required:
+                emphasis_areas.append('Error Handling')
+            if standards.type_safety_emphasis:
+                emphasis_areas.append('Type Safety')
+            if standards.performance_focus:
+                emphasis_areas.append('Performance')
+            if standards.documentation_required:
+                emphasis_areas.append('Documentation')
+            if standards.testing_emphasis:
+                emphasis_areas.append('Testing')
+        
+            standards_info = {
+                'standards_applied': True,
+                'emphasis_areas': emphasis_areas
+            }
+            print("DEBUG: Standards information retrieved successfully")
+        except Exception as e:
+            print(f"DEBUG: Error getting standards: {e}")
+            standards_info = {'standards_applied': False}
     else:
         standards_info = {'standards_applied': False}
     
     # Convert to format expected by GitHub Actions
-    result_dict = {
-        'passed': result.passed,
-        'score': result.quality_score,
-        'penalty': result.quality_penalty,
-        'blocking_issues': len(result.blocking_issues),
-        'summary': result.summary,
-        'issues': {
-            'blocking': [
-                {
-                    'category': issue.category,
-                    'message': issue.message,
-                    'file': issue.file_path,
-                    'line': issue.line_number,
-                    'suggestion': issue.suggestion
-                }
-                for issue in result.blocking_issues
-            ],
-            'warning': [
-                {
-                    'category': issue.category,
-                    'message': issue.message,
-                    'file': issue.file_path,
-                    'line': issue.line_number,
-                    'suggestion': issue.suggestion
-                }
-                for issue in result.warning_issues
-            ]
+    print("DEBUG: Converting result to GitHub Actions format...")
+    try:
+        result_dict = {
+            'passed': result.passed,
+            'score': result.quality_score,
+            'penalty': result.quality_penalty,
+            'blocking_issues': len(result.blocking_issues),
+            'summary': result.summary,
+            'issues': {
+                'blocking': [
+                    {
+                        'category': issue.category,
+                        'message': issue.message,
+                        'file': issue.file_path,
+                        'line': issue.line_number,
+                        'suggestion': issue.suggestion
+                    }
+                    for issue in result.blocking_issues
+                ],
+                'warning': [
+                    {
+                        'category': issue.category,
+                        'message': issue.message,
+                        'file': issue.file_path,
+                        'line': issue.line_number,
+                        'suggestion': issue.suggestion
+                    }
+                    for issue in result.warning_issues
+                ]
+            }
         }
-    }
+        print("DEBUG: Result conversion completed successfully")
+    except Exception as e:
+        print(f"DEBUG: Error converting result: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
     
     # Add standards information
     result_dict.update(standards_info)
