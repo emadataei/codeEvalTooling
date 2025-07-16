@@ -122,7 +122,7 @@ module.exports = async ({ github, context }) => {
     comment += `1. Fix all critical issues listed above\n`;
     comment += `2. Run quality checks locally before pushing\n`;
     comment += `3. Consider the recommended improvements for better code quality\n\n`;
-    comment += `**Note:** Cognitive analysis will be blocked until these issues are resolved.\n`;
+    comment += `**Note:** Cognitive analysis will still run to provide complexity insights.\n`;
   }
   
   console.log('Creating PR comment with content length:', comment.length);

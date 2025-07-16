@@ -112,7 +112,7 @@ jobs:
     name: Cognitive Complexity Analysis
     runs-on: ubuntu-latest
     needs: quality-gate
-    if: always() && needs.quality-gate.outputs.quality-passed != '' # Run even if quality gate fails (for testing)
+    if: always() # Always run cognitive analysis on PR events and commits
     outputs:
       tier: ${{ steps.cognitive-analysis.outputs.tier }}
       total-score: ${{ steps.cognitive-analysis.outputs.total_score }}
@@ -190,7 +190,7 @@ jobs:
           AI_FOUNDRY_MODEL: ${{ secrets.AI_FOUNDRY_MODEL }}
       
       - name: Add Cognitive Analysis Summary to PR
-        if: github.event_name == 'pull_request'
+        if: always() && github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
