@@ -131,6 +131,7 @@ module.exports = async ({ github, context }) => {
     context, 
     prNumber, 
     comment, 
-    'GitHub Actions Quality Gate'  // identifier to find existing comments
+    'Code Quality Gate',  // identifier to find existing comments (matches comment header)
+    'QUALITY_GATE_COMMENT'  // unique comment ID for reliable matching
   );
 };

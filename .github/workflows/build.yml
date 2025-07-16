@@ -112,7 +112,7 @@ jobs:
     name: Cognitive Complexity Analysis
     runs-on: ubuntu-latest
     needs: quality-gate
-    if: needs.quality-gate.outputs.quality-passed == 'true'
+    if: always() && needs.quality-gate.outputs.quality-passed != '' # Run even if quality gate fails (for testing)
     outputs:
       tier: ${{ steps.cognitive-analysis.outputs.tier }}
       total-score: ${{ steps.cognitive-analysis.outputs.total_score }}

@@ -62,10 +62,28 @@ async function createOrUpdateComment(github, context, prNumber, commentBody, ide
       issue_number: prNumber,
     });
 
-    // Find existing comment by identifier
-    const existingComment = comments.find(comment => 
-      comment.body.includes(identifier)
-    );
+    // Find existing comment by comment ID first (more reliable), then by identifier
+    let existingComment = null;
+    if (commentId) {
+      existingComment = comments.find(comment => 
+        comment.body.includes(`<!-- comment-id: ${commentId} -->`)
+      );
+    }
+    
+    // Fallback to identifier matching if no comment ID match found
+    if (!existingComment) {
+      existingComment = comments.find(comment => 
+        comment.body.includes(identifier)
+      );
+    }
+
+    console.log(`Found ${comments.length} existing comments on PR`);
+    console.log(`Looking for comment ID: "${commentId || 'none'}"`);
+    console.log(`Looking for identifier: "${identifier}"`);
+    console.log(`Found existing comment: ${!!existingComment}`);
+    if (existingComment) {
+      console.log(`Existing comment ID: ${existingComment.id}`);
+    }
 
     // Add comment ID if provided (for GitHub Actions workflow tracking)
     const finalCommentBody = commentId ? 

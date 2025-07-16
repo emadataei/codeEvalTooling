@@ -86,7 +86,8 @@ module.exports = async ({ github, context }) => {
     context, 
     prNumber, 
     comment, 
-    'Cognitive Complexity Analysis'  // identifier to find existing comments
+    'Cognitive Complexity Analysis',  // identifier to find existing comments
+    'COGNITIVE_ANALYSIS_COMMENT'  // unique comment ID for reliable matching
   );
   
   // Set labels based on tier
