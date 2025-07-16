@@ -29,7 +29,10 @@ module.exports = async ({ github, context }) => {
   
   const info = tierInfo[tier] || tierInfo[2];
   
+  const timestamp = new Date().toISOString();
+  const runId = process.env.GITHUB_RUN_ID || 'unknown';
   let comment = `## Cognitive Complexity Analysis\n\n`;
+  comment += `*Last updated: ${timestamp} (Run: ${runId})*\n\n`;
   comment += `### ${info.name} - ${info.action}\n\n`;
   comment += `**Complexity Score:** ${score} points (${info.description})\n\n`;
   comment += `**Analysis Summary:** ${results.reasoning}\n\n`;

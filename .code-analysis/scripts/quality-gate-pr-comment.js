@@ -32,7 +32,10 @@ module.exports = async ({ github, context }) => {
   const status = passed ? 'PASSED' : 'FAILED';
   
   // Build comprehensive, actionable comment
+  const timestamp = new Date().toISOString();
+  const runId = process.env.GITHUB_RUN_ID || 'unknown';
   let comment = `## Code Quality Gate ${status}\n\n`;
+  comment += `*Last updated: ${timestamp} (Run: ${runId})*\n\n`;
   
   // Score and summary with context
   comment += `**Quality Score:** ${score}/100`;
