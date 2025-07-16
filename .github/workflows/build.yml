@@ -178,8 +178,7 @@ jobs:
           echo "Number of changed files: ${{ steps.changed-files.outputs.all_changed_files_count }}"
           
           if [ -z "${{ steps.changed-files.outputs.all_changed_files }}" ] || [ "${{ steps.changed-files.outputs.all_changed_files_count }}" = "0" ]; then
-            echo "No changed files detected by GitHub Actions. Skipping analysis."
-            exit 0
+            echo "No changed files detected by GitHub Actions. Running cognitive analysis anyway."
           fi
           echo "Using detected changed files from GitHub Actions: ${{ steps.changed-files.outputs.all_changed_files }}"
           export CHANGED_FILES="${{ steps.changed-files.outputs.all_changed_files }}"
