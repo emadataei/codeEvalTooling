@@ -108,10 +108,10 @@ jobs:
         if: always()
 
   cognitive-scoring:
-    name: Cognitive Complexity Analysis
+    name: Cognitive Complexity Analysis (DISABLED - using cognitive_scoring.yml)
     runs-on: ubuntu-latest
     needs: quality-gate
-    if: always() # Always run cognitive analysis on PR events and commits
+    if: false  # Disabled to prevent conflicts with cognitive_scoring.yml
     outputs:
       tier: ${{ steps.cognitive-analysis.outputs.tier }}
       total-score: ${{ steps.cognitive-analysis.outputs.total_score }}
