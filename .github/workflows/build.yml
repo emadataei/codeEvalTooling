@@ -88,6 +88,10 @@ jobs:
           echo "Using detected changed files from GitHub Actions: ${{ steps.changed-files.outputs.all_changed_files }}"
           export CHANGED_FILES="${{ steps.changed-files.outputs.all_changed_files }}"
           python .code-analysis/scripts/run_quality_gate.py
+        env:
+          AI_FOUNDRY_ENDPOINT: ${{ secrets.AI_FOUNDRY_ENDPOINT }}
+          AI_FOUNDRY_TOKEN: ${{ secrets.AI_FOUNDRY_TOKEN }}
+          AI_FOUNDRY_MODEL: ${{ secrets.AI_FOUNDRY_MODEL }}
       
       - name: Add Quality Gate Summary to PR
         if: always()
