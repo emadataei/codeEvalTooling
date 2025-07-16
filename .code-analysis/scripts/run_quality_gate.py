@@ -34,16 +34,13 @@ def analyze_changed_files(file_list):
     
     # Parse file list (GitHub Actions passes space-separated files)
     changed_files = [f.strip() for f in file_list.split() if f.strip()]
-    print(f"DEBUG: Parsed {len(changed_files)} files: {changed_files}")
     
     # Filter for code files and read content
     pr_files = []
     
     for file_path in changed_files:
         try:
-            print(f"DEBUG: Checking file: {file_path}")
             if not os.path.exists(file_path):
-                print(f"DEBUG: File does not exist: {file_path}")
                 continue
                 
             with open(file_path, 'r', encoding='utf-8') as f:
@@ -65,19 +62,16 @@ def analyze_changed_files(file_list):
             
             language = language_map.get(ext, 'unknown')
             
-            print(f"DEBUG: Added file {file_path} with language {language}")
             pr_files.append({
                 'path': file_path,
                 'content': content,
                 'language': language
             })
             
-        except Exception as e:
+        except Exception:
             # Skip files that can't be read
-            print(f"DEBUG: Error reading file {file_path}: {e}")
             continue
     
-    print(f"DEBUG: Total valid code files: {len(pr_files)}")
     if not pr_files:
         return {
             'passed': True,
@@ -95,31 +89,13 @@ def analyze_changed_files(file_list):
     # Set enable_ai=False to disable AI analysis for faster execution
     enable_ai = os.getenv('QUALITY_GATE_AI_ENABLED', 'true').lower() == 'true'
     
-    print(f"DEBUG: AI enabled: {enable_ai}")
-    try:
-        quality_gate = QualityGate(enable_ai=enable_ai)
-        print("DEBUG: QualityGate initialized successfully")
-    except Exception as e:
-        print(f"DEBUG: Error initializing QualityGate: {e}")
-        import traceback
-        traceback.print_exc()
-        raise
-    
-    try:
-        result = quality_gate.analyze_pr(pr_files)
-        print("DEBUG: Quality gate analysis completed successfully")
-        print(f"DEBUG: Result passed: {result.passed}, score: {result.quality_score}")
-    except Exception as e:
-        print(f"DEBUG: Error during quality gate analysis: {e}")
-        import traceback
-        traceback.print_exc()
-        raise
+    quality_gate = QualityGate(enable_ai=enable_ai)
+    result = quality_gate.analyze_pr(pr_files)
     
     # Get standards information for enhanced reporting
     standards_info = {}
     if enable_ai:
         try:
-            print("DEBUG: Getting standards information...")
             standards = quality_gate.copilot_parser.get_standards()
             emphasis_areas = []
             if standards.error_handling_required:
@@ -137,51 +113,41 @@ def analyze_changed_files(file_list):
                 'standards_applied': True,
                 'emphasis_areas': emphasis_areas
             }
-            print("DEBUG: Standards information retrieved successfully")
-        except Exception as e:
-            print(f"DEBUG: Error getting standards: {e}")
+        except Exception:
             standards_info = {'standards_applied': False}
     else:
         standards_info = {'standards_applied': False}
     
     # Convert to format expected by GitHub Actions
-    print("DEBUG: Converting result to GitHub Actions format...")
-    try:
-        result_dict = {
-            'passed': result.passed,
-            'score': result.quality_score,
-            'penalty': result.quality_penalty,
-            'blocking_issues': len(result.blocking_issues),
-            'summary': result.summary,
-            'issues': {
-                'blocking': [
-                    {
-                        'category': issue.category,
-                        'message': issue.message,
-                        'file': issue.file_path,
-                        'line': issue.line_number,
-                        'suggestion': issue.suggestion
-                    }
-                    for issue in result.blocking_issues
-                ],
-                'warning': [
-                    {
-                        'category': issue.category,
-                        'message': issue.message,
-                        'file': issue.file_path,
-                        'line': issue.line_number,
-                        'suggestion': issue.suggestion
-                    }
-                    for issue in result.warning_issues
-                ]
-            }
+    result_dict = {
+        'passed': result.passed,
+        'score': result.quality_score,
+        'penalty': result.quality_penalty,
+        'blocking_issues': len(result.blocking_issues),
+        'summary': result.summary,
+        'issues': {
+            'blocking': [
+                {
+                    'category': issue.category,
+                    'message': issue.message,
+                    'file': issue.file_path,
+                    'line': issue.line_number,
+                    'suggestion': issue.suggestion
+                }
+                for issue in result.blocking_issues
+            ],
+            'warning': [
+                {
+                    'category': issue.category,
+                    'message': issue.message,
+                    'file': issue.file_path,
+                    'line': issue.line_number,
+                    'suggestion': issue.suggestion
+                }
+                for issue in result.warning_issues
+            ]
         }
-        print("DEBUG: Result conversion completed successfully")
-    except Exception as e:
-        print(f"DEBUG: Error converting result: {e}")
-        import traceback
-        traceback.print_exc()
-        raise
+    }
     
     # Add standards information
     result_dict.update(standards_info)
@@ -193,8 +159,6 @@ def main():
     """Main entry point for GitHub Actions."""
     try:
         changed_files = os.getenv('CHANGED_FILES', '')
-        print(f"DEBUG: CHANGED_FILES env var: '{changed_files}'")
-        print(f"DEBUG: Working directory: {os.getcwd()}")
         result = analyze_changed_files(changed_files)
         
         # Set outputs for GitHub Actions
