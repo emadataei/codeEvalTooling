@@ -1,8 +1,14 @@
-name: Cognitive Scoring & Tier Assignment
+name: Cognitive Scoring & Tier Assignment (DISABLED)
 
 on:
-  pull_request:
-    types: [opened, synchronize]
+  # Disabled to prevent conflicts with main build.yml workflow
+  # The build.yml workflow now handles both quality gate and cognitive analysis
+  workflow_dispatch: # Only allow manual trigger
+    inputs:
+      force_run:
+        description: 'Force run this workflow (not recommended - use build.yml instead)'
+        required: false
+        default: 'false'
 
 permissions:
   contents: read
@@ -12,6 +18,8 @@ permissions:
 jobs:
   cognitive-analysis:
     runs-on: ubuntu-latest
+    # Only run if manually triggered with force_run=true
+    if: github.event.inputs.force_run == 'true'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
