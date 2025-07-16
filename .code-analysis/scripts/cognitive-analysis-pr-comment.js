@@ -1,11 +1,21 @@
-const fs = require('fs');
+const { getPRNumber, loadResults, createOrUpdateComment, setLabels } = require('./pr-comment-utils');
 
 module.exports = async ({ github, context }) => {
-  let results = { tier: 0, total_score: 0, reasoning: 'Failed to load results' };
-  try {
-    results = JSON.parse(fs.readFileSync('cognitive-analysis-results.json', 'utf8'));
-  } catch (error) {
-    console.log('Could not read cognitive analysis results:', error);
+  const prNumber = getPRNumber(context);
+  if (!prNumber) {
+    console.log('No PR number found, skipping comment');
+    return;
+  }
+  
+  const results = loadResults('cognitive-analysis-results.json', { 
+    tier: 0, 
+    total_score: 0, 
+    reasoning: 'Failed to load results' 
+  });
+  
+  if (results.reasoning === 'Failed to load results') {
+    console.log('Failed to load cognitive analysis results');
+    return;
   }
   
   const tier = results.tier;
@@ -50,40 +60,19 @@ module.exports = async ({ github, context }) => {
     comment += `- High complexity - careful review needed\n`;
   }
   
-  const { data: comments } = await github.rest.issues.listComments({
-    owner: context.repo.owner,
-    repo: context.repo.repo,
-    issue_number: context.issue.number,
-  });
-  
-  const existingComment = comments.find(comment => 
-    comment.body.includes('Cognitive Complexity Analysis')
+  // Create or update the comment
+  await createOrUpdateComment(
+    github, 
+    context, 
+    prNumber, 
+    comment, 
+    'Cognitive Complexity Analysis'  // identifier to find existing comments
   );
   
-  if (existingComment) {
-    await github.rest.issues.updateComment({
-      owner: context.repo.owner,
-      repo: context.repo.repo,
-      comment_id: existingComment.id,
-      body: comment
-    });
-  } else {
-    await github.rest.issues.createComment({
-      owner: context.repo.owner,
-      repo: context.repo.repo,
-      issue_number: context.issue.number,
-      body: comment
-    });
-  }
-  
+  // Set labels based on tier
   const labels = [`tier-${tier}`];
   if (tier === 0) labels.push('auto-merge-candidate');
   if (tier === 2) labels.push('needs-expert-review');
   
-  await github.rest.issues.setLabels({
-    owner: context.repo.owner,
-    repo: context.repo.repo,
-    issue_number: context.issue.number,
-    labels: labels
-  });
+  await setLabels(github, context, prNumber, labels);
 };

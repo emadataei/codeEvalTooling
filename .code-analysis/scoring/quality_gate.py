@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from enum import Enum
 from .ai_client_factory import AIClientFactory
+from .copilot_instruction_parser import CopilotInstructionParser
 
 
 # Constants for repeated strings
@@ -70,6 +71,9 @@ class QualityGate:
         """Initialize Quality Gate with optional AI capabilities."""
         self.enable_ai = enable_ai
         self.ai_client = None
+        
+        # Initialize Copilot instruction parser for project standards
+        self.copilot_parser = CopilotInstructionParser()
         
         # Initialize AI client if enabled
         if self.enable_ai:
@@ -419,11 +423,19 @@ class QualityGate:
             return []
             
         try:
+            # Get project-specific coding standards from Copilot instructions
+            standards = self.copilot_parser.get_standards()
+            
             # Prepare code for AI analysis
             combined_changes = self._prepare_code_for_ai(pr_files)
             
+            # Build context-aware prompt with project standards
+            standards_context = self._build_standards_context(standards)
+            
             prompt = f"""
 You are an expert code reviewer analyzing a pull request for quality issues. 
+
+{standards_context}
 
 Review the following code changes and identify any quality, security, maintainability, or performance issues.
 
@@ -548,6 +560,46 @@ Focus on issues that static analysis might miss, such as:
             ))
         
         return issues
+    
+    def _build_standards_context(self, standards) -> str:
+        """Build context from project's Copilot instructions for AI analysis."""
+        context_parts = []
+        
+        if standards.key_principles:
+            context_parts.append(f"Project Coding Standards:\n{standards.key_principles}")
+        
+        if standards.preferred_patterns:
+            patterns = "\n".join([f"- {pattern}" for pattern in standards.preferred_patterns[:5]])
+            context_parts.append(f"Preferred Patterns:\n{patterns}")
+        
+        if standards.discouraged_patterns:
+            patterns = "\n".join([f"- {pattern}" for pattern in standards.discouraged_patterns[:5]])
+            context_parts.append(f"Discouraged Patterns:\n{patterns}")
+        
+        if standards.code_organization:
+            org = "\n".join([f"- {item}" for item in standards.code_organization[:5]])
+            context_parts.append(f"Code Organization Requirements:\n{org}")
+        
+        # Add emphasis flags as context
+        emphasis_items = []
+        if standards.error_handling_required:
+            emphasis_items.append("- Proper error handling is required")
+        if standards.type_safety_emphasis:
+            emphasis_items.append("- Type safety is emphasized")
+        if standards.performance_focus:
+            emphasis_items.append("- Performance considerations are important")
+        if standards.documentation_required:
+            emphasis_items.append("- Code documentation is required")
+        if standards.testing_emphasis:
+            emphasis_items.append("- Testing coverage is emphasized")
+        
+        if emphasis_items:
+            context_parts.append("Project Emphasis:\n" + "\n".join(emphasis_items))
+        
+        if context_parts:
+            return "Consider the following project-specific standards when reviewing:\n\n" + "\n\n".join(context_parts) + "\n"
+        else:
+            return "Apply general coding best practices when reviewing.\n"
     
     def _generate_summary(self, passed: bool, quality_score: int,
                          blocking: List[QualityIssue], 

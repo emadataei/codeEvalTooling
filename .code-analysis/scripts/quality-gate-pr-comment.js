@@ -1,4 +1,4 @@
-const fs = require('fs');
+const { getPRNumber, loadResults, createOrUpdateComment } = require('./pr-comment-utils');
 
 module.exports = async ({ github, context }) => {
   console.log('=== Quality Gate PR Comment Debug ===');
@@ -7,28 +7,23 @@ module.exports = async ({ github, context }) => {
   console.log('Has issue context:', !!context.issue);
   console.log('Has PR context:', !!context.payload.pull_request);
   
-  const prNumber = context.issue?.number || 
-                 context.payload?.pull_request?.number || 
-                 context.payload?.number;
-  
+  const prNumber = getPRNumber(context);
   console.log('Detected PR number:', prNumber);
   
   if (!prNumber) {
     console.log('No PR number found, skipping comment');
-    console.log('Available context keys:', Object.keys(context));
-    if (context.payload) {
-      console.log('Payload keys:', Object.keys(context.payload));
-    }
     return;
   }
   
   console.log('Attempting to read quality-gate-results.json...');
-  let results = { passed: false, score: 0, summary: 'Failed to load results' };
-  try {
-    results = JSON.parse(fs.readFileSync('quality-gate-results.json', 'utf8'));
-    console.log('Quality gate results loaded successfully:', Object.keys(results));
-  } catch (error) {
-    console.log('Could not read quality gate results:', error.message);
+  const results = loadResults('quality-gate-results.json', { 
+    passed: false, 
+    score: 0, 
+    summary: 'Failed to load results' 
+  });
+  
+  if (!results.passed && results.summary === 'Failed to load results') {
+    console.log('Failed to load results, skipping comment');
     return;
   }
   
@@ -78,48 +73,13 @@ module.exports = async ({ github, context }) => {
   console.log('Creating PR comment with content length:', comment.length);
   console.log('Comment preview (first 100 chars):', comment.substring(0, 100));
   
-  try {
-    console.log('Looking for existing GitHub Actions Quality Gate comments...');
-    const { data: comments } = await github.rest.issues.listComments({
-      owner: context.repo.owner,
-      repo: context.repo.repo,
-      issue_number: prNumber,
-    });
-    
-    console.log(`Found ${comments.length} total comments on PR`);
-    
-    const existingComment = comments.find(comment => 
-      comment.body.includes('<!-- GITHUB_ACTIONS_QUALITY_GATE -->') ||
-      (comment.body.includes('Quality Gate') && comment.user.login === 'github-actions[bot]')
-    );
-    
-    const commentWithId = `<!-- GITHUB_ACTIONS_QUALITY_GATE -->\n${comment}`;
-    
-    if (existingComment) {
-      console.log('Updating existing GitHub Actions Quality Gate comment ID:', existingComment.id);
-      await github.rest.issues.updateComment({
-        owner: context.repo.owner,
-        repo: context.repo.repo,
-        comment_id: existingComment.id,
-        body: commentWithId
-      });
-      console.log('Successfully updated existing GitHub Actions comment');
-    } else {
-      console.log('Creating new GitHub Actions Quality Gate comment...');
-      const result = await github.rest.issues.createComment({
-        owner: context.repo.owner,
-        repo: context.repo.repo,
-        issue_number: prNumber,
-        body: commentWithId
-      });
-      console.log('Successfully created new GitHub Actions comment with ID:', result.data.id);
-    }
-  } catch (error) {
-    console.error('Error posting/updating GitHub Actions comment:', error);
-    console.error('Error details:', error.message);
-    if (error.response) {
-      console.error('Response status:', error.response.status);
-      console.error('Response data:', error.response.data);
-    }
-  }
+  // Create or update the comment using shared utility
+  await createOrUpdateComment(
+    github, 
+    context, 
+    prNumber, 
+    comment, 
+    'GitHub Actions Quality Gate',  // identifier to find existing comments
+    'GITHUB_ACTIONS_QUALITY_GATE'  // comment ID for workflow tracking
+  );
 };

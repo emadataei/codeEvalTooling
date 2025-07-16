@@ -1,7 +1,19 @@
 import os
-from azure.ai.inference import ChatCompletionsClient
-from azure.identity import DefaultAzureCredential
-from azure.core.credentials import AzureKeyCredential
+
+try:
+    from azure.ai.inference import ChatCompletionsClient
+    from azure.identity import DefaultAzureCredential
+    from azure.core.credentials import AzureKeyCredential
+    AZURE_AVAILABLE = True
+except ImportError:
+    AZURE_AVAILABLE = False
+    # Define placeholder classes for when Azure isn't available
+    class ChatCompletionsClient:
+        pass
+    class DefaultAzureCredential:
+        pass
+    class AzureKeyCredential:
+        pass
 
 
 class AIClientFactory:
@@ -42,6 +54,9 @@ class AIClientFactory:
         Returns:
             True if configuration is valid
         """
+        if not AZURE_AVAILABLE:
+            raise ValueError("Azure AI dependencies not available. Install: pip install azure-ai-inference azure-identity")
+        
         endpoint = os.getenv("AI_FOUNDRY_ENDPOINT")
         if not endpoint:
             raise ValueError("Missing required environment variable: AI_FOUNDRY_ENDPOINT")
