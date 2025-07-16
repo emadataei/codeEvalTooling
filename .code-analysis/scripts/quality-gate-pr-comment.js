@@ -131,7 +131,6 @@ module.exports = async ({ github, context }) => {
     context, 
     prNumber, 
     comment, 
-    'GitHub Actions Quality Gate',  // identifier to find existing comments
-    'GITHUB_ACTIONS_QUALITY_GATE'  // comment ID for workflow tracking
+    'GitHub Actions Quality Gate'  // identifier to find existing comments
   );
 };
