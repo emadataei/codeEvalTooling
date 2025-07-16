@@ -1,7 +1,7 @@
 // This file has intentional quality issues for testing
 // TODO: Added test comment to trigger change detection 
 // Additional comment to test quality gate comment updates
-// Debug: Testing cognitive_scoring.yml for tier labels (debug-8)
+// Debug: Fixed label conflicts - only update_pr_metadata.py sets labels (debug-9)
 import { useState } from 'react'
 
 // Missing interface definition - should trigger type safety warning

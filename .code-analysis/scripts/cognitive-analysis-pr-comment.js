@@ -1,4 +1,4 @@
-const { getPRNumber, loadResults, createOrUpdateComment, setLabels } = require('./pr-comment-utils');
+const { getPRNumber, loadResults, createOrUpdateComment } = require('./pr-comment-utils');
 
 module.exports = async ({ github, context }) => {
   console.log('=== Cognitive Analysis PR Comment Debug ===');
@@ -113,17 +113,5 @@ module.exports = async ({ github, context }) => {
     throw error;
   }
   
-  // Set labels based on tier
-  const labels = [`tier-${tier}`];
-  if (tier === 0) labels.push('auto-merge-candidate');
-  if (tier === 2) labels.push('needs-expert-review');
-  
-  console.log('Setting labels for tier', tier, ':', labels);
-  try {
-    await setLabels(github, context, prNumber, labels);
-    console.log('Successfully set labels:', labels);
-  } catch (error) {
-    console.error('Error setting labels:', error);
-    throw error;
-  }
+  console.log('Cognitive analysis comment completed. Labels will be set by update_pr_metadata.py script.');
 };
