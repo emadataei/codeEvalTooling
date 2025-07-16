@@ -57,7 +57,7 @@ jobs:
         id: quality-check
         run: |
           echo "Running Quality Gate Analysis..."
-          python scripts/run_quality_gate.py
+          python .code-analysis/scripts/run_quality_gate.py
         env:
           CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
       

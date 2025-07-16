@@ -198,7 +198,7 @@ QUALITY_GATE_AI_ENABLED=true  # Set to 'false' to disable AI analysis
 
 ```yaml
 - name: Run Quality Gate with AI
-  run: python scripts/run_quality_gate.py
+  run: python .code-analysis/scripts/run_quality_gate.py
   env:
     CHANGED_FILES: ${{ steps.get-changed-files.outputs.all_changed_files }}
     AI_FOUNDRY_ENDPOINT: ${{ secrets.AI_FOUNDRY_ENDPOINT }}

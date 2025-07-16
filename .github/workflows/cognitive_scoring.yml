@@ -30,7 +30,7 @@ jobs:
       - name: Run Static Analysis
         run: |
           # Run linting and complexity analysis
-          pylint --load-plugins=pylint.extensions.mccabe --reports=y src/ || true
+          pylint --load-plugins=pylint.extensions.mccabe --reports=y .code-analysis/ || true
           
       - name: Analyze PR Cognitive Complexity
         env:
@@ -39,7 +39,7 @@ jobs:
           AI_FOUNDRY_MODEL: ${{ secrets.AI_FOUNDRY_MODEL }}
           AI_FOUNDRY_TOKEN: ${{ secrets.AI_FOUNDRY_TOKEN }}
         run: |
-          python scripts/analyze_pr.py \
+          python .code-analysis/scripts/analyze_pr.py \
             --pr-number ${{ github.event.pull_request.number }} \
             --repo ${{ github.repository }}
 
@@ -48,7 +48,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
-          python scripts/update_pr_metadata.py \
+          python .code-analysis/scripts/update_pr_metadata.py \
             --pr-number ${{ github.event.pull_request.number }}
 
       - name: Post Cognitive Score Comment

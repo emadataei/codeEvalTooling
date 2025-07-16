@@ -11,8 +11,8 @@ import json
 import os
 from pathlib import Path
 
-# Add .code-analysis to Python path
-sys.path.insert(0, str(Path(__file__).parent.parent / '.code-analysis'))
+# Add .code-analysis to Python path (script is now inside .code-analysis/scripts/)
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Try to import cognitive analyzer, fallback if AI dependencies missing
 try:

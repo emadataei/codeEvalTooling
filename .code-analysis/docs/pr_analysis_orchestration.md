@@ -29,7 +29,7 @@ graph TD
 
 **Purpose**: Catch fundamental quality issues early and provide immediate feedback
 
-**Script**: `scripts/run_quality_gate.py`
+**Script**: `.code-analysis/scripts/run_quality_gate.py`
 
 **What it checks**:
 - Security vulnerabilities (hardcoded secrets, SQL injection, unsafe eval)
@@ -46,7 +46,7 @@ graph TD
 
 **Purpose**: Assess mental effort required to review and understand changes
 
-**Script**: `scripts/run_cognitive_analysis.py`
+**Script**: `.code-analysis/scripts/run_cognitive_analysis.py`
 
 **What it analyzes**:
 - Static code complexity (control structures, nesting, function length)
@@ -65,7 +65,7 @@ graph TD
 ```bash
 # GitHub Actions step
 - name: Run Quality Gate
-  run: python scripts/run_quality_gate.py
+  run: python .code-analysis/scripts/run_quality_gate.py
   env:
     CHANGED_FILES: ${{ steps.get-changed-files.outputs.all_changed_files }}
 ```
@@ -106,7 +106,7 @@ graph TD
 ```bash
 # GitHub Actions step (runs only if Quality Gate passes)
 - name: Run Cognitive Analysis
-  run: python scripts/run_cognitive_analysis.py
+  run: python .code-analysis/scripts/run_cognitive_analysis.py
   env:
     CHANGED_FILES: ${{ steps.get-changed-files.outputs.all_changed_files }}
 ```
@@ -252,20 +252,20 @@ jobs:
         
       - name: Quality Gate Analysis
         id: quality-gate
-        run: python scripts/run_quality_gate.py
+        run: python .code-analysis/scripts/run_quality_gate.py
         env:
           CHANGED_FILES: ${{ steps.get-changed-files.outputs.all_changed_files }}
           
       - name: Cognitive Complexity Analysis
         id: cognitive-analysis
         if: steps.quality-gate.outcome == 'success'
-        run: python scripts/run_cognitive_analysis.py
+        run: python .code-analysis/scripts/run_cognitive_analysis.py
         env:
           CHANGED_FILES: ${{ steps.get-changed-files.outputs.all_changed_files }}
           
       - name: Update PR Metadata
         if: steps.cognitive-analysis.outcome == 'success'
-        run: python scripts/update_pr_metadata.py
+        run: python .code-analysis/scripts/update_pr_metadata.py
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           TIER: ${{ steps.cognitive-analysis.outputs.tier }}
