@@ -1,4 +1,5 @@
 // This file has intentional quality issues for testing
+// TODO: Added test comment to trigger change detection
 import { useState } from 'react'
 
 // Missing interface definition - should trigger type safety warning
