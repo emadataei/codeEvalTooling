@@ -65,8 +65,8 @@ def run_cognitive_analysis(file_list, quality_penalty=0):
         
         analyzer = MinimalAnalyzer()
     
-    # Parse file list and prepare for analysis
-    changed_files = [f.strip() for f in file_list.split('\n') if f.strip()]
+    # Parse file list (GitHub Actions passes space-separated files)
+    changed_files = [f.strip() for f in file_list.split() if f.strip()]
     
     # Filter for code files and read content
     pr_files = []
