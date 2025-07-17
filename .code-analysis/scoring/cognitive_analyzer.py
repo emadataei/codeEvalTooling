@@ -28,6 +28,7 @@ class CognitiveScore:
     tier: int
     reasoning: str
     quality_penalty: int = 0
+    ast_metrics: Optional[Dict] = None  # Detailed AST analysis breakdown
 
 # Scoring Constants
 class ScoringThresholds:
@@ -70,11 +71,16 @@ class ScoringThresholds:
 
 class CognitiveAnalyzer:
     def __init__(self):
-        # Validate configuration
-        AIClientFactory.validate_config()
-        
-        # Initialize AI Foundry client
-        self.ai_client = AIClientFactory.create_client()
+        # Initialize AI client if available, but don't fail without it
+        try:
+            # Validate configuration
+            AIClientFactory.validate_config()
+            
+            # Initialize AI Foundry client
+            self.ai_client = AIClientFactory.create_client()
+        except Exception:
+            # Continue without AI client - AST analysis will still work
+            self.ai_client = None
         
         self.file_impact_weights = {
             'migration': 10, 'schema': 10, 'api': 8, 'config': 6,
@@ -83,13 +89,18 @@ class CognitiveAnalyzer:
     
     def _get_model_name(self) -> str:
         """Get the model deployment name"""
-        return AIClientFactory.get_model_name()
+        if self.ai_client:
+            return AIClientFactory.get_model_name()
+        return "unavailable"
     
     def analyze_pr(self, pr_files: List[Dict], quality_penalty: int = 0) -> CognitiveScore:
         """Main entry point for analyzing a PR's cognitive complexity"""
         static_score = self._calculate_static_score(pr_files)
         impact_score = self._calculate_impact_score(pr_files)
         ai_score = self._calculate_ai_score(pr_files)
+        
+        # Capture detailed AST metrics for PR comments
+        ast_metrics = self._collect_ast_metrics(pr_files)
         
         # Add quality penalty to total score
         total_score = static_score + impact_score + ai_score + quality_penalty
@@ -109,7 +120,8 @@ class CognitiveAnalyzer:
             total_score=total_score,
             tier=tier,
             reasoning=reasoning,
-            quality_penalty=quality_penalty
+            quality_penalty=quality_penalty,
+            ast_metrics=ast_metrics
         )
     
     def _calculate_static_score(self, pr_files: List[Dict]) -> int:
@@ -137,6 +149,81 @@ class CognitiveAnalyzer:
             total_score += min(score, ScoringThresholds.STATIC_SCORE_PER_FILE_MAX)
         
         return min(total_score, ScoringThresholds.STATIC_SCORE_MAX)
+    
+    def _collect_ast_metrics(self, pr_files: List[Dict]) -> Dict:
+        """
+        Collect detailed AST metrics for each file for PR comments.
+        
+        Returns comprehensive breakdown of complexity metrics per file.
+        """
+        file_metrics = {}
+        total_metrics = {
+            'total_cyclomatic_complexity': 0,
+            'max_nesting_depth': 0,
+            'total_functions': 0,
+            'total_control_structures': 0,
+            'complex_files': []
+        }
+        
+        for file_info in pr_files:
+            file_path = file_info['path']
+            
+            # Get detailed AST metrics
+            metrics = ast_analyzer.analyze_file(file_path)
+            
+            file_data = {
+                'path': file_path,
+                'language': file_info.get('language', 'unknown'),
+                'total_score': metrics.total_score,
+                'cyclomatic_complexity': metrics.cyclomatic_complexity,
+                'nesting_depth': metrics.nesting_depth,
+                'function_count': metrics.function_count,
+                'control_structures': metrics.control_structures,
+                'function_length_penalty': metrics.function_length_penalty,
+                'file_size_penalty': metrics.file_size_penalty
+            }
+            
+            file_metrics[file_path] = file_data
+            
+            # Update totals
+            total_metrics['total_cyclomatic_complexity'] += metrics.cyclomatic_complexity
+            total_metrics['max_nesting_depth'] = max(total_metrics['max_nesting_depth'], metrics.nesting_depth)
+            total_metrics['total_functions'] += metrics.function_count
+            total_metrics['total_control_structures'] += metrics.control_structures
+            
+            # Flag complex files for special attention
+            if metrics.total_score > 15:
+                total_metrics['complex_files'].append({
+                    'path': file_path,
+                    'score': metrics.total_score,
+                    'main_issues': self._identify_complexity_issues(metrics)
+                })
+        
+        return {
+            'files': file_metrics,
+            'summary': total_metrics
+        }
+    
+    def _identify_complexity_issues(self, metrics) -> List[str]:
+        """Identify the main complexity issues in a file."""
+        issues = []
+        
+        if metrics.cyclomatic_complexity > 10:
+            issues.append(f"High cyclomatic complexity ({metrics.cyclomatic_complexity})")
+        
+        if metrics.nesting_depth > 4:
+            issues.append(f"Deep nesting ({metrics.nesting_depth} levels)")
+        
+        if metrics.function_length_penalty > 1:
+            issues.append("Long functions detected")
+        
+        if metrics.control_structures > 15:
+            issues.append(f"Many control structures ({metrics.control_structures})")
+        
+        if not issues:
+            issues.append("Multiple complexity factors")
+        
+        return issues
     
     def _calculate_impact_score(self, pr_files: List[Dict]) -> int:
         """
