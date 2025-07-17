@@ -83,6 +83,17 @@ jobs:
         run: |
           python .code-analysis/scripts/run_cognitive_analysis.py
 
+      - name: Run AI Pre-Review Analysis
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AI_FOUNDRY_ENDPOINT: ${{ secrets.AI_FOUNDRY_ENDPOINT }}
+          AI_FOUNDRY_MODEL: ${{ secrets.AI_FOUNDRY_MODEL }}
+          AI_FOUNDRY_TOKEN: ${{ secrets.AI_FOUNDRY_TOKEN }}
+          CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          python .code-analysis/scripts/ai_pre_review.py
+
       - name: Update PR Labels and Assignees
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -90,6 +101,14 @@ jobs:
         run: |
           python .code-analysis/scripts/update_pr_metadata.py \
             --pr-number ${{ github.event.pull_request.number }}
+
+      - name: Post AI Pre-Review Comment
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const script = require('./.code-analysis/scripts/ai-pre-review-pr-comment.js');
+            return await script({ github, context });
 
       - name: Post Cognitive Score Comment
         if: always()
