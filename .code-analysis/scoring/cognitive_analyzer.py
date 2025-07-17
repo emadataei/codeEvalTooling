@@ -6,7 +6,7 @@ determine appropriate review tiers and automation levels for pull requests.
 
 For detailed scoring documentation, see: docs/cognitive_scoring.md
 
-The analyzer combines static code analysis, impact assessment, and AI-powered
+The analyzer combines AST-based static code analysis, impact assessment, and AI-powered
 complexity evaluation to assign cognitive scores and review tiers.
 """
 
@@ -17,6 +17,7 @@ from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 from pathlib import Path
 from .ai_client_factory import AIClientFactory
+from .ast_analyzer import ast_analyzer
 
 @dataclass
 class CognitiveScore:
@@ -113,63 +114,29 @@ class CognitiveAnalyzer:
     
     def _calculate_static_score(self, pr_files: List[Dict]) -> int:
         """
-        Calculate complexity from static analysis.
+        Calculate complexity from AST-based static analysis.
         
-        Analyzes code structure, control flow, and function complexity.
-        Different analysis approaches for different languages.
+        Uses AST-based analysis for precise complexity measurement including:
+        - Control structures and cyclomatic complexity
+        - Nesting depth calculation
+        - Function length penalties
+        - Language-specific complexity patterns
         
         Returns: 0-40 points (capped)
         """
         total_score = 0
         
         for file_info in pr_files:
-            if file_info['language'] == 'python':
-                score = self._analyze_python_complexity(file_info['content'])
-            elif file_info['language'] in ['javascript', 'typescript']:
-                score = self._analyze_js_complexity(file_info['content'])
-            else:
-                score = self._analyze_generic_complexity(file_info['content'])
+            file_path = file_info['path']
+            
+            # Use AST analyzer for precise complexity measurement
+            metrics = ast_analyzer.analyze_file(file_path)
+            score = metrics.total_score
             
             # Cap per file to prevent single complex file from dominating
             total_score += min(score, ScoringThresholds.STATIC_SCORE_PER_FILE_MAX)
         
         return min(total_score, ScoringThresholds.STATIC_SCORE_MAX)
-    
-    def _analyze_python_complexity(self, content: str) -> int:
-        """
-        Analyze Python-specific complexity metrics using AST.
-        
-        Scoring breakdown:
-        - Control structures (if/for/while/with): +1 each
-        - Nesting depth: +1 per level  
-        - Function length penalties: +1 (>20 lines), +3 (>50 lines)
-        
-        Returns: Complexity score for this file
-        """
-        try:
-            tree = ast.parse(content)
-            complexity = 0
-            
-            for node in ast.walk(tree):
-                # Count control structures
-                if isinstance(node, (ast.If, ast.For, ast.While, ast.With)):
-                    complexity += ScoringThresholds.CONTROL_STRUCTURE_POINTS
-                elif isinstance(node, ast.FunctionDef):
-                    # Add nesting depth penalty
-                    depth = self._calculate_nesting_depth(node)
-                    complexity += depth
-                    
-                    # Function length penalties
-                    lines = len(content.splitlines())
-                    if lines > ScoringThresholds.FUNCTION_LENGTH_LARGE_THRESHOLD:
-                        complexity += ScoringThresholds.FUNCTION_LENGTH_LARGE_PENALTY
-                    elif lines > ScoringThresholds.FUNCTION_LENGTH_MEDIUM_THRESHOLD:
-                        complexity += ScoringThresholds.FUNCTION_LENGTH_MEDIUM_PENALTY
-            
-            return complexity
-        except Exception:
-            # Fall back to generic analysis if AST parsing fails
-            return self._analyze_generic_complexity(content)
     
     def _calculate_impact_score(self, pr_files: List[Dict]) -> int:
         """
@@ -335,12 +302,11 @@ class CognitiveAnalyzer:
                 
         # Check individual file complexity (prevent one complex file from sneaking through)
         for file_info in pr_files:
-            if file_info['language'] == 'python':
-                file_complexity = self._analyze_python_complexity(file_info['content'])
-            elif file_info['language'] in ['javascript', 'typescript']:
-                file_complexity = self._analyze_js_complexity(file_info['content'])
-            else:
-                file_complexity = self._analyze_generic_complexity(file_info['content'])
+            file_path = file_info['path']
+            
+            # Use AST analyzer for precise complexity measurement
+            metrics = ast_analyzer.analyze_file(file_path)
+            file_complexity = metrics.total_score
                 
             # If any single file is too complex, require human review
             if file_complexity > 15:
@@ -381,7 +347,8 @@ class CognitiveAnalyzer:
             return 2
     
     def _calculate_nesting_depth(self, node) -> int:
-        """Calculate maximum nesting depth in AST node"""
+        """Calculate maximum nesting depth in AST node - deprecated, use AST analyzer instead"""
+        # This method is kept for compatibility but should use AST analyzer
         max_depth = 0
         for child in ast.walk(node):
             if isinstance(child, (ast.If, ast.For, ast.While, ast.With)):
@@ -393,62 +360,6 @@ class CognitiveAnalyzer:
                     parent = parent.parent
                 max_depth = max(max_depth, depth)
         return max_depth
-    
-    def _analyze_js_complexity(self, content: str) -> int:
-        """
-        Analyze JavaScript/TypeScript complexity.
-        
-        Scoring breakdown:
-        - Control structures: +1 each (if/for/while/switch/try/catch)
-        - Functions: +1 each (function declarations and arrows)
-        - Async patterns: +1 each (.then/.catch/callback calls)
-        
-        Returns: Complexity score for this file
-        """
-        complexity = 0
-        
-        # Count control structures
-        control_patterns = r'\b(if|for|while|switch|try|catch)\b'
-        complexity += len(re.findall(control_patterns, content))
-        
-        # Count function definitions
-        function_patterns = r'\bfunction\b|\b=>\b'
-        complexity += len(re.findall(function_patterns, content))
-        
-        # Count async/callback patterns
-        async_patterns = r'\.then\(|\.catch\(|callback\('
-        complexity += len(re.findall(async_patterns, content))
-        
-        return complexity
-    
-    def _analyze_generic_complexity(self, content: str) -> int:
-        """
-        Generic complexity analysis for other languages.
-        
-        Scoring breakdown:
-        - Control structures: +1 each (if/for/while/switch/try/catch)
-        - Structural complexity: +1 per 3 brackets (rough nesting estimate)
-        - File size penalties: +2 (>50 lines), +5 (>100 lines)
-        
-        Returns: Complexity score for this file
-        """
-        complexity = 0
-        
-        # Count control structures (case-insensitive)
-        control_patterns = r'\b(if|for|while|switch|try|catch)\b'
-        complexity += len(re.findall(control_patterns, content, re.IGNORECASE))
-        
-        # Estimate structural complexity from brackets
-        complexity += content.count('{') // ScoringThresholds.BRACKETS_PER_POINT
-        
-        # File size penalties
-        lines = len(content.splitlines())
-        if lines > ScoringThresholds.LARGE_FILE_THRESHOLD:
-            complexity += ScoringThresholds.LARGE_FILE_PENALTY
-        elif lines > ScoringThresholds.MEDIUM_FILE_THRESHOLD:
-            complexity += ScoringThresholds.MEDIUM_FILE_PENALTY
-        
-        return complexity
     
     def _count_imports(self, content: str) -> int:
         """Count import statements in code"""

@@ -53,13 +53,13 @@ def run_cognitive_analysis(file_list, quality_penalty=0):
     except Exception:
         # Create a minimal analyzer without AI
         class MinimalAnalyzer:
-            def analyze_pr(self, _files):
+            def analyze_pr(self, _files, quality_penalty=0):
                 return CognitiveScore(
                     static_score=10,
                     impact_score=5,
                     ai_score=0,
                     total_score=15 + quality_penalty,
-                    tier=0 if 15 + quality_penalty <= 25 else 1,
+                    tier=0 if 15 + quality_penalty <= 35 else 1,
                     reasoning="Static analysis only - AI client not available"
                 )
         
