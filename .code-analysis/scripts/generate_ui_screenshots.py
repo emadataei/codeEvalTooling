@@ -86,7 +86,7 @@ class UIScreenshotGenerator:
         
         return '/'
     
-    def _start_dev_server(self) -> subprocess.Popen:
+    def _start_dev_server(self) -> tuple[subprocess.Popen, int]:
         """Start the development server for screenshot generation."""
         print("Starting development server...")
         
@@ -99,22 +99,51 @@ class UIScreenshotGenerator:
             cwd=self.project_dir,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
+            bufsize=1,
+            universal_newlines=True
         )
         
-        # Wait for server to start
+        # Wait for server to start and detect the port
         import time
-        print("Waiting for development server to start...")
-        time.sleep(20)  # Give more time for server to start in CI
+        import re
         
-        return process
+        port = 3000  # Default port
+        print("Waiting for development server to start...")
+        
+        # Read output to find the actual port
+        for _ in range(30):  # Wait up to 30 seconds
+            if process.poll() is not None:
+                print("❌ Development server exited early")
+                break
+            
+            # Try to read a line from stdout
+            try:
+                line = process.stdout.readline()
+                if line:
+                    print(f"Dev server: {line.strip()}")
+                    # Look for the port in the output
+                    match = re.search(r'Local:\s+http://localhost:(\d+)', line)
+                    if match:
+                        port = int(match.group(1))
+                        print(f"✅ Detected server running on port {port}")
+                        break
+            except Exception:
+                pass
+            
+            time.sleep(1)
+        
+        # Give it a bit more time to fully start
+        time.sleep(5)
+        
+        return process, port
     
-    def _generate_screenshot(self, page: Dict) -> Optional[str]:
+    def _generate_screenshot(self, page: Dict, port: int = 3000) -> Optional[str]:
         """Generate a screenshot for a specific page."""
         page_name = page['name']
         page_path = page['path']
         
-        print(f"Capturing screenshot for {page['description']}...")
+        print(f"Capturing screenshot for {page['description']} on port {port}...")
         
         # Create simple node script that runs from the project directory
         script_content = f"""
@@ -123,20 +152,35 @@ const path = require('path');
 const fs = require('fs');
 
 (async () => {{
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({{ headless: true }});
   const page = await browser.newPage();
   
   try {{
     await page.setViewportSize({{ width: 1280, height: 720 }});
     
-    console.log('Navigating to http://localhost:3000{page_path}...');
-    await page.goto('http://localhost:3000{page_path}', {{ waitUntil: 'networkidle', timeout: 30000 }});
+    console.log('Navigating to http://localhost:{port}{page_path}...');
     
-    // Wait a bit for dynamic content
-    await page.waitForTimeout(5000);
+    // First, try to navigate to the page
+    const response = await page.goto('http://localhost:{port}{page_path}', {{ 
+      waitUntil: 'networkidle', 
+      timeout: 30000 
+    }});
+    
+    console.log('Response status:', response.status());
+    console.log('Response URL:', response.url());
+    
+    // Wait for content to load
+    await page.waitForTimeout(3000);
+    
+    // Log page content for debugging
+    const title = await page.title();
+    console.log('Page title:', title);
+    
+    const bodyText = await page.evaluate(() => document.body.innerText.substring(0, 200));
+    console.log('Body content preview:', bodyText);
     
     // Ensure screenshots directory exists
-    const screenshotsDir = path.resolve('../screenshots');
+    const screenshotsDir = '{str(self.screenshots_dir).replace(chr(92), "/")}';
     if (!fs.existsSync(screenshotsDir)) {{
       fs.mkdirSync(screenshotsDir, {{ recursive: true }});
     }}
@@ -147,10 +191,16 @@ const fs = require('fs');
     
     await page.screenshot({{ 
       path: screenshotPath,
-      fullPage: true
+      fullPage: true,
+      type: 'png'
     }});
     
     console.log('Screenshot saved successfully: {page_name}.png');
+    
+    // Verify file was created and has content
+    const stats = fs.statSync(screenshotPath);
+    console.log('Screenshot file size:', stats.size, 'bytes');
+    
   }} catch (error) {{
     console.error('Error capturing {page_name}:', error.message);
     console.error('Stack:', error.stack);
@@ -222,27 +272,36 @@ const fs = require('fs');
         screenshots = []
         
         try:
-            dev_server = self._start_dev_server()
+            dev_server, port = self._start_dev_server()
             
-            # Verify server is responding
-            print("Verifying development server is ready...")
+            # Verify server is responding on the detected port
+            print(f"Verifying development server is ready on port {port}...")
             import requests
             import time
-            for i in range(10):  # Try for 10 seconds
+            server_ready = False
+            
+            for i in range(15):  # Try for 15 seconds
                 try:
-                    response = requests.get("http://localhost:3000", timeout=5)
+                    response = requests.get(f"http://localhost:{port}", timeout=5)
                     if response.status_code == 200:
                         print("✅ Development server is responding")
+                        print(f"Response content length: {len(response.text)}")
+                        server_ready = True
                         break
-                except Exception:
-                    if i == 9:
-                        print("❌ Development server not responding after 10 attempts")
+                except Exception as e:
+                    print(f"Attempt {i+1}/15: Server not ready - {e}")
+                    if i == 14:
+                        print("❌ Development server not responding after 15 attempts")
                         return []
                     time.sleep(1)
             
+            if not server_ready:
+                print("❌ Development server failed to become ready")
+                return []
+            
             # Generate screenshots
             for page in pages:
-                screenshot_path = self._generate_screenshot(page)
+                screenshot_path = self._generate_screenshot(page, port)
                 if screenshot_path:
                     screenshots.append(screenshot_path)
         

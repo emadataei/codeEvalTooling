@@ -56,4 +56,25 @@ function UserCard(props: any) {
   )
 }
 
-export default UserCard
+// Proper Next.js page component
+export default function HomePage() {
+  return (
+    <main style={{padding: '2rem', minHeight: '100vh', backgroundColor: '#f0f0f0'}}>
+      <h1 style={{color: '#333', marginBottom: '2rem'}}>Code Evaluation Demo</h1>
+      <p style={{color: '#666', marginBottom: '1rem'}}>This is a sample Next.js application for testing UI changes.</p>
+      <UserCard 
+        name="John Doe" 
+        email="john.doe@example.com" 
+      />
+      <div style={{marginTop: '2rem', padding: '1rem', border: '1px solid #ddd', borderRadius: '8px'}}>
+        <h3>Features to test:</h3>
+        <ul>
+          <li>Visual diff detection</li>
+          <li>Component changes</li>
+          <li>Style modifications</li>
+          <li>Layout updates</li>
+        </ul>
+      </div>
+    </main>
+  )
+}
