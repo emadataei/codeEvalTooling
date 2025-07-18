@@ -87,7 +87,7 @@ class SemanticCommitAnalyzer:
         try:
             result = subprocess.run([
                 'git', 'log', '--oneline', '--numstat', 
-                'origin/main..HEAD', '--pretty=format:%H|%s'
+                'origin/Master..HEAD', '--pretty=format:%H|%s'
             ], capture_output=True, text=True, check=True)
             
             return self._parse_git_log_output(result.stdout)
