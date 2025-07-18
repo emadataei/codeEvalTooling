@@ -76,7 +76,11 @@ module.exports = async ({ github, context }) => {
   
   // Risk factors (only if any)
   if (results.risk_factors && results.risk_factors.length > 0) {
-    comment += `**Risk Factors:** ${results.risk_factors.length} detected\n\n`;
+    comment += `**Risk Factors:**\n`;
+    results.risk_factors.forEach(factor => {
+      comment += `- ${factor}\n`;
+    });
+    comment += `\n`;
   }
   
   // Minimal footer
