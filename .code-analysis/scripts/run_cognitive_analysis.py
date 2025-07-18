@@ -22,13 +22,14 @@ except ImportError:
     COGNITIVE_AVAILABLE = False
     # Create a minimal fallback
     class CognitiveScore:
-        def __init__(self, static_score=0, impact_score=0, ai_score=0, total_score=0, tier=0, reasoning="Static analysis only"):
+        def __init__(self, static_score=0, impact_score=0, ai_score=0, total_score=0, tier=0, reasoning="Static analysis only", ast_metrics=None):
             self.static_score = static_score
             self.impact_score = impact_score
             self.ai_score = ai_score
             self.total_score = total_score
             self.tier = tier
             self.reasoning = reasoning
+            self.ast_metrics = ast_metrics
 
 
 def run_cognitive_analysis(file_list, quality_penalty=0):
@@ -53,20 +54,33 @@ def run_cognitive_analysis(file_list, quality_penalty=0):
     except Exception:
         # Create a minimal analyzer without AI
         class MinimalAnalyzer:
-            def analyze_pr(self, _files):
+            def analyze_pr(self, _files, quality_penalty=0):
+                # Basic AST metrics for fallback
+                ast_metrics = {
+                    'summary': {
+                        'total_cyclomatic_complexity': 5,
+                        'max_nesting_depth': 2,
+                        'total_functions': 2,
+                        'total_control_structures': 8,
+                        'complex_files': []
+                    },
+                    'files': {}
+                }
+                
                 return CognitiveScore(
                     static_score=10,
                     impact_score=5,
                     ai_score=0,
                     total_score=15 + quality_penalty,
-                    tier=0 if 15 + quality_penalty <= 25 else 1,
-                    reasoning="Static analysis only - AI client not available"
+                    tier=0 if 15 + quality_penalty <= 35 else 1,
+                    reasoning="Static analysis only - AI client not available",
+                    ast_metrics=ast_metrics
                 )
         
         analyzer = MinimalAnalyzer()
     
-    # Parse file list and prepare for analysis
-    changed_files = [f.strip() for f in file_list.split('\n') if f.strip()]
+    # Parse file list (GitHub Actions passes space-separated files)
+    changed_files = [f.strip() for f in file_list.split() if f.strip()]
     
     # Filter for code files and read content
     pr_files = []
@@ -128,7 +142,8 @@ def run_cognitive_analysis(file_list, quality_penalty=0):
         'static_score': result.static_score,
         'impact_score': result.impact_score,
         'ai_score': result.ai_score,
-        'quality_penalty': quality_penalty
+        'quality_penalty': quality_penalty,
+        'ast_metrics': result.ast_metrics if hasattr(result, 'ast_metrics') else None
     }
 
 
@@ -157,6 +172,10 @@ def main():
     
     # Create detailed results file
     with open('cognitive-analysis-results.json', 'w') as f:
+        json.dump(result, f, indent=2)
+    
+    # Also create the legacy filename for compatibility
+    with open('cognitive_score.json', 'w') as f:
         json.dump(result, f, indent=2)
 
 

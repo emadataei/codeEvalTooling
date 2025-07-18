@@ -41,10 +41,18 @@ jobs:
             **/*.ts
             **/*.jsx
             **/*.tsx
+            **/*.mjs
+            **/*.cjs
+            **/*.vue
+            **/*.svelte
             **/*.java
             **/*.cs
             **/*.go
             **/*.rs
+            sample-project/**/*.js
+            sample-project/**/*.ts
+            sample-project/**/*.jsx
+            sample-project/**/*.tsx
           files_ignore: |
             **/*.md
             **/*.txt
@@ -52,17 +60,40 @@ jobs:
             **/*.yaml
             **/*.json
             **/Dockerfile
+            **/node_modules/**
+            **/dist/**
+            **/build/**
+      
+      - name: Debug changed files
+        run: |
+          echo "=== Changed Files Debug ==="
+          echo "All changed files:"
+          echo "${{ steps.changed-files.outputs.all_changed_files }}"
+          echo "Number of changed files: ${{ steps.changed-files.outputs.all_changed_files_count }}"
+          echo "Changed files (space-separated):"
+          echo "${{ steps.changed-files.outputs.all_changed_files }}" | tr ' ' '\n'
+          echo "=== End Debug ==="
       
       - name: Run Quality Gate Analysis
         id: quality-check
         run: |
           echo "Running Quality Gate Analysis..."
+          echo "Changed files from GitHub Actions: '${{ steps.changed-files.outputs.all_changed_files }}'"
+          echo "Number of changed files: ${{ steps.changed-files.outputs.all_changed_files_count }}"
+          
+          if [ -z "${{ steps.changed-files.outputs.all_changed_files }}" ] || [ "${{ steps.changed-files.outputs.all_changed_files_count }}" = "0" ]; then
+            echo "No changed files detected by GitHub Actions. Running quality gate anyway."
+          fi
+          echo "Using detected changed files from GitHub Actions: ${{ steps.changed-files.outputs.all_changed_files }}"
+          export CHANGED_FILES="${{ steps.changed-files.outputs.all_changed_files }}"
           python .code-analysis/scripts/run_quality_gate.py
         env:
-          CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+          AI_FOUNDRY_ENDPOINT: ${{ secrets.AI_FOUNDRY_ENDPOINT }}
+          AI_FOUNDRY_TOKEN: ${{ secrets.AI_FOUNDRY_TOKEN }}
+          AI_FOUNDRY_MODEL: ${{ secrets.AI_FOUNDRY_MODEL }}
       
       - name: Add Quality Gate Summary to PR
-        if: always()
+        if: always() && github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
@@ -74,74 +105,4 @@ jobs:
         with:
           name: quality-gate-results
           path: quality-gate-results.json
-        if: always()
-
-  cognitive-scoring:
-    name: Cognitive Complexity Analysis
-    runs-on: ubuntu-latest
-    needs: quality-gate
-    if: needs.quality-gate.outputs.quality-passed == 'true'
-    outputs:
-      tier: ${{ steps.cognitive-analysis.outputs.tier }}
-      total-score: ${{ steps.cognitive-analysis.outputs.total_score }}
-      reasoning: ${{ steps.cognitive-analysis.outputs.reasoning }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-      
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-      
-      - name: Download Quality Gate Results
-        uses: actions/download-artifact@v4
-        with:
-          name: quality-gate-results
-      
-      - name: Get changed files for cognitive analysis
-        id: changed-files
-        uses: tj-actions/changed-files@v41
-        with:
-          files: |
-            **/*.py
-            **/*.js
-            **/*.ts
-            **/*.jsx
-            **/*.tsx
-            **/*.java
-            **/*.cs
-            **/*.go
-            **/*.rs
-      
-      - name: Run Cognitive Analysis
-        id: cognitive-analysis
-        run: |
-          echo "Running Cognitive Complexity Analysis..."
-          python .code-analysis/scripts/run_cognitive_analysis.py
-        env:
-          CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
-          AI_FOUNDRY_ENDPOINT: ${{ secrets.AI_FOUNDRY_ENDPOINT }}
-          AI_FOUNDRY_TOKEN: ${{ secrets.AI_FOUNDRY_TOKEN }}
-          AI_FOUNDRY_MODEL: ${{ secrets.AI_FOUNDRY_MODEL }}
-      
-      - name: Add Cognitive Analysis Summary to PR
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const script = require('./.code-analysis/scripts/cognitive-analysis-pr-comment.js');
-            return await script({ github, context });
-      
-      - name: Upload Cognitive Analysis Results
-        uses: actions/upload-artifact@v4
-        with:
-          name: cognitive-analysis-results
-          path: cognitive-analysis-results.json
         if: always()

@@ -1,5 +1,7 @@
 # GitHub Copilot Instructions
 
+DO NOT ADD EMOJIS TO MARKDOWN FILES OR CODE COMMENTS.
+
 ## AI Assistant Guidelines for Code Generation
 
 When generating code, please follow these patterns and conventions to maintain consistency and quality across the project.

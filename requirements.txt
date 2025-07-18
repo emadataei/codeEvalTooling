@@ -1,0 +1,10 @@
+# Core dependencies for the code evaluation system
+azure-ai-inference==1.0.0b9
+azure-identity
+PyGithub
+sonarqube-api
+pylint
+
+# Additional analysis dependencies
+requests
+pathlib2; python_version < '3.4'

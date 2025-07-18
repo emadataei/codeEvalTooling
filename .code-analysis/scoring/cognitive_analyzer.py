@@ -6,7 +6,7 @@ determine appropriate review tiers and automation levels for pull requests.
 
 For detailed scoring documentation, see: docs/cognitive_scoring.md
 
-The analyzer combines static code analysis, impact assessment, and AI-powered
+The analyzer combines AST-based static code analysis, impact assessment, and AI-powered
 complexity evaluation to assign cognitive scores and review tiers.
 """
 
@@ -17,6 +17,7 @@ from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 from pathlib import Path
 from .ai_client_factory import AIClientFactory
+from .ast_analyzer import ast_analyzer
 
 @dataclass
 class CognitiveScore:
@@ -27,6 +28,7 @@ class CognitiveScore:
     tier: int
     reasoning: str
     quality_penalty: int = 0
+    ast_metrics: Optional[Dict] = None  # Detailed AST analysis breakdown
 
 # Scoring Constants
 class ScoringThresholds:
@@ -69,11 +71,16 @@ class ScoringThresholds:
 
 class CognitiveAnalyzer:
     def __init__(self):
-        # Validate configuration
-        AIClientFactory.validate_config()
-        
-        # Initialize AI Foundry client
-        self.ai_client = AIClientFactory.create_client()
+        # Initialize AI client if available, but don't fail without it
+        try:
+            # Validate configuration
+            AIClientFactory.validate_config()
+            
+            # Initialize AI Foundry client
+            self.ai_client = AIClientFactory.create_client()
+        except Exception:
+            # Continue without AI client - AST analysis will still work
+            self.ai_client = None
         
         self.file_impact_weights = {
             'migration': 10, 'schema': 10, 'api': 8, 'config': 6,
@@ -82,13 +89,18 @@ class CognitiveAnalyzer:
     
     def _get_model_name(self) -> str:
         """Get the model deployment name"""
-        return AIClientFactory.get_model_name()
+        if self.ai_client:
+            return AIClientFactory.get_model_name()
+        return "unavailable"
     
     def analyze_pr(self, pr_files: List[Dict], quality_penalty: int = 0) -> CognitiveScore:
         """Main entry point for analyzing a PR's cognitive complexity"""
         static_score = self._calculate_static_score(pr_files)
         impact_score = self._calculate_impact_score(pr_files)
         ai_score = self._calculate_ai_score(pr_files)
+        
+        # Capture detailed AST metrics for PR comments
+        ast_metrics = self._collect_ast_metrics(pr_files)
         
         # Add quality penalty to total score
         total_score = static_score + impact_score + ai_score + quality_penalty
@@ -108,68 +120,110 @@ class CognitiveAnalyzer:
             total_score=total_score,
             tier=tier,
             reasoning=reasoning,
-            quality_penalty=quality_penalty
+            quality_penalty=quality_penalty,
+            ast_metrics=ast_metrics
         )
     
     def _calculate_static_score(self, pr_files: List[Dict]) -> int:
         """
-        Calculate complexity from static analysis.
+        Calculate complexity from AST-based static analysis.
         
-        Analyzes code structure, control flow, and function complexity.
-        Different analysis approaches for different languages.
+        Uses AST-based analysis for precise complexity measurement including:
+        - Control structures and cyclomatic complexity
+        - Nesting depth calculation
+        - Function length penalties
+        - Language-specific complexity patterns
         
         Returns: 0-40 points (capped)
         """
         total_score = 0
         
         for file_info in pr_files:
-            if file_info['language'] == 'python':
-                score = self._analyze_python_complexity(file_info['content'])
-            elif file_info['language'] in ['javascript', 'typescript']:
-                score = self._analyze_js_complexity(file_info['content'])
-            else:
-                score = self._analyze_generic_complexity(file_info['content'])
+            file_path = file_info['path']
+            
+            # Use AST analyzer for precise complexity measurement
+            metrics = ast_analyzer.analyze_file(file_path)
+            score = metrics.total_score
             
             # Cap per file to prevent single complex file from dominating
             total_score += min(score, ScoringThresholds.STATIC_SCORE_PER_FILE_MAX)
         
         return min(total_score, ScoringThresholds.STATIC_SCORE_MAX)
     
-    def _analyze_python_complexity(self, content: str) -> int:
+    def _collect_ast_metrics(self, pr_files: List[Dict]) -> Dict:
         """
-        Analyze Python-specific complexity metrics using AST.
+        Collect detailed AST metrics for each file for PR comments.
         
-        Scoring breakdown:
-        - Control structures (if/for/while/with): +1 each
-        - Nesting depth: +1 per level  
-        - Function length penalties: +1 (>20 lines), +3 (>50 lines)
-        
-        Returns: Complexity score for this file
+        Returns comprehensive breakdown of complexity metrics per file.
         """
-        try:
-            tree = ast.parse(content)
-            complexity = 0
+        file_metrics = {}
+        total_metrics = {
+            'total_cyclomatic_complexity': 0,
+            'max_nesting_depth': 0,
+            'total_functions': 0,
+            'total_control_structures': 0,
+            'complex_files': []
+        }
+        
+        for file_info in pr_files:
+            file_path = file_info['path']
             
-            for node in ast.walk(tree):
-                # Count control structures
-                if isinstance(node, (ast.If, ast.For, ast.While, ast.With)):
-                    complexity += ScoringThresholds.CONTROL_STRUCTURE_POINTS
-                elif isinstance(node, ast.FunctionDef):
-                    # Add nesting depth penalty
-                    depth = self._calculate_nesting_depth(node)
-                    complexity += depth
-                    
-                    # Function length penalties
-                    lines = len(content.splitlines())
-                    if lines > ScoringThresholds.FUNCTION_LENGTH_LARGE_THRESHOLD:
-                        complexity += ScoringThresholds.FUNCTION_LENGTH_LARGE_PENALTY
-                    elif lines > ScoringThresholds.FUNCTION_LENGTH_MEDIUM_THRESHOLD:
-                        complexity += ScoringThresholds.FUNCTION_LENGTH_MEDIUM_PENALTY
+            # Get detailed AST metrics
+            metrics = ast_analyzer.analyze_file(file_path)
             
-            return complexity
-        except Exception:
-            # Fall back to generic analysis if AST parsing fails
-            return self._analyze_generic_complexity(content)
+            file_data = {
+                'path': file_path,
+                'language': file_info.get('language', 'unknown'),
+                'total_score': metrics.total_score,
+                'cyclomatic_complexity': metrics.cyclomatic_complexity,
+                'nesting_depth': metrics.nesting_depth,
+                'function_count': metrics.function_count,
+                'control_structures': metrics.control_structures,
+                'function_length_penalty': metrics.function_length_penalty,
+                'file_size_penalty': metrics.file_size_penalty
+            }
+            
+            file_metrics[file_path] = file_data
+            
+            # Update totals
+            total_metrics['total_cyclomatic_complexity'] += metrics.cyclomatic_complexity
+            total_metrics['max_nesting_depth'] = max(total_metrics['max_nesting_depth'], metrics.nesting_depth)
+            total_metrics['total_functions'] += metrics.function_count
+            total_metrics['total_control_structures'] += metrics.control_structures
+            
+            # Flag complex files for special attention
+            if metrics.total_score > 15:
+                total_metrics['complex_files'].append({
+                    'path': file_path,
+                    'score': metrics.total_score,
+                    'main_issues': self._identify_complexity_issues(metrics)
+                })
+        
+        return {
+            'files': file_metrics,
+            'summary': total_metrics
+        }
+    
+    def _identify_complexity_issues(self, metrics) -> List[str]:
+        """Identify the main complexity issues in a file."""
+        issues = []
+        
+        if metrics.cyclomatic_complexity > 10:
+            issues.append(f"High cyclomatic complexity ({metrics.cyclomatic_complexity})")
+        
+        if metrics.nesting_depth > 4:
+            issues.append(f"Deep nesting ({metrics.nesting_depth} levels)")
+        
+        if metrics.function_length_penalty > 1:
+            issues.append("Long functions detected")
+        
+        if metrics.control_structures > 15:
+            issues.append(f"Many control structures ({metrics.control_structures})")
+        
+        if not issues:
+            issues.append("Multiple complexity factors")
+        
+        return issues
     
     def _calculate_impact_score(self, pr_files: List[Dict]) -> int:
         """
@@ -335,12 +389,11 @@ class CognitiveAnalyzer:
                 
         # Check individual file complexity (prevent one complex file from sneaking through)
         for file_info in pr_files:
-            if file_info['language'] == 'python':
-                file_complexity = self._analyze_python_complexity(file_info['content'])
-            elif file_info['language'] in ['javascript', 'typescript']:
-                file_complexity = self._analyze_js_complexity(file_info['content'])
-            else:
-                file_complexity = self._analyze_generic_complexity(file_info['content'])
+            file_path = file_info['path']
+            
+            # Use AST analyzer for precise complexity measurement
+            metrics = ast_analyzer.analyze_file(file_path)
+            file_complexity = metrics.total_score
                 
             # If any single file is too complex, require human review
             if file_complexity > 15:
@@ -381,7 +434,8 @@ class CognitiveAnalyzer:
             return 2
     
     def _calculate_nesting_depth(self, node) -> int:
-        """Calculate maximum nesting depth in AST node"""
+        """Calculate maximum nesting depth in AST node - deprecated, use AST analyzer instead"""
+        # This method is kept for compatibility but should use AST analyzer
         max_depth = 0
         for child in ast.walk(node):
             if isinstance(child, (ast.If, ast.For, ast.While, ast.With)):
@@ -393,62 +447,6 @@ class CognitiveAnalyzer:
                     parent = parent.parent
                 max_depth = max(max_depth, depth)
         return max_depth
-    
-    def _analyze_js_complexity(self, content: str) -> int:
-        """
-        Analyze JavaScript/TypeScript complexity.
-        
-        Scoring breakdown:
-        - Control structures: +1 each (if/for/while/switch/try/catch)
-        - Functions: +1 each (function declarations and arrows)
-        - Async patterns: +1 each (.then/.catch/callback calls)
-        
-        Returns: Complexity score for this file
-        """
-        complexity = 0
-        
-        # Count control structures
-        control_patterns = r'\b(if|for|while|switch|try|catch)\b'
-        complexity += len(re.findall(control_patterns, content))
-        
-        # Count function definitions
-        function_patterns = r'\bfunction\b|\b=>\b'
-        complexity += len(re.findall(function_patterns, content))
-        
-        # Count async/callback patterns
-        async_patterns = r'\.then\(|\.catch\(|callback\('
-        complexity += len(re.findall(async_patterns, content))
-        
-        return complexity
-    
-    def _analyze_generic_complexity(self, content: str) -> int:
-        """
-        Generic complexity analysis for other languages.
-        
-        Scoring breakdown:
-        - Control structures: +1 each (if/for/while/switch/try/catch)
-        - Structural complexity: +1 per 3 brackets (rough nesting estimate)
-        - File size penalties: +2 (>50 lines), +5 (>100 lines)
-        
-        Returns: Complexity score for this file
-        """
-        complexity = 0
-        
-        # Count control structures (case-insensitive)
-        control_patterns = r'\b(if|for|while|switch|try|catch)\b'
-        complexity += len(re.findall(control_patterns, content, re.IGNORECASE))
-        
-        # Estimate structural complexity from brackets
-        complexity += content.count('{') // ScoringThresholds.BRACKETS_PER_POINT
-        
-        # File size penalties
-        lines = len(content.splitlines())
-        if lines > ScoringThresholds.LARGE_FILE_THRESHOLD:
-            complexity += ScoringThresholds.LARGE_FILE_PENALTY
-        elif lines > ScoringThresholds.MEDIUM_FILE_THRESHOLD:
-            complexity += ScoringThresholds.MEDIUM_FILE_PENALTY
-        
-        return complexity
     
     def _count_imports(self, content: str) -> int:
         """Count import statements in code"""

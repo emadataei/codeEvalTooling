@@ -32,8 +32,8 @@ def analyze_changed_files(file_list):
             }
         }
     
-    # Parse file list
-    changed_files = [f.strip() for f in file_list.split('\n') if f.strip()]
+    # Parse file list (GitHub Actions passes space-separated files)
+    changed_files = [f.strip() for f in file_list.split() if f.strip()]
     
     # Filter for code files and read content
     pr_files = []
@@ -69,7 +69,8 @@ def analyze_changed_files(file_list):
             })
             
         except Exception:
-            pass  # Skip files that can't be read
+            # Skip files that can't be read
+            continue
     
     if not pr_files:
         return {
@@ -83,10 +84,11 @@ def analyze_changed_files(file_list):
                 'warning': []
             }
         }
-    
+
     # Run quality gate analysis with AI enabled
     # Set enable_ai=False to disable AI analysis for faster execution
     enable_ai = os.getenv('QUALITY_GATE_AI_ENABLED', 'true').lower() == 'true'
+    
     quality_gate = QualityGate(enable_ai=enable_ai)
     result = quality_gate.analyze_pr(pr_files)
     
@@ -106,7 +108,7 @@ def analyze_changed_files(file_list):
                 emphasis_areas.append('Documentation')
             if standards.testing_emphasis:
                 emphasis_areas.append('Testing')
-            
+        
             standards_info = {
                 'standards_applied': True,
                 'emphasis_areas': emphasis_areas
@@ -155,24 +157,31 @@ def analyze_changed_files(file_list):
 
 def main():
     """Main entry point for GitHub Actions."""
-    changed_files = os.getenv('CHANGED_FILES', '')
-    result = analyze_changed_files(changed_files)
-    
-    # Set outputs for GitHub Actions
-    github_output = os.getenv('GITHUB_OUTPUT')
-    if github_output:
-        with open(github_output, 'a') as f:
-            f.write(f"passed={str(result['passed']).lower()}\n")
-            f.write(f"score={result['score']}\n")
-            f.write(f"penalty={result['penalty']}\n")
-            f.write(f"blocking_issues={result['blocking_issues']}\n")
-    
-    # Create detailed results file
-    with open('quality-gate-results.json', 'w') as f:
-        json.dump(result, f, indent=2)
-    
-    # Exit with error code if quality gate fails
-    if not result['passed']:
+    try:
+        changed_files = os.getenv('CHANGED_FILES', '')
+        result = analyze_changed_files(changed_files)
+        
+        # Set outputs for GitHub Actions
+        github_output = os.getenv('GITHUB_OUTPUT')
+        if github_output:
+            with open(github_output, 'a') as f:
+                f.write(f"passed={str(result['passed']).lower()}\n")
+                f.write(f"score={result['score']}\n")
+                f.write(f"penalty={result['penalty']}\n")
+                f.write(f"blocking_issues={result['blocking_issues']}\n")
+        
+        # Create detailed results file
+        with open('quality-gate-results.json', 'w') as f:
+            json.dump(result, f, indent=2)
+        
+        # Exit with error code if quality gate fails
+        if not result['passed']:
+            sys.exit(1)
+            
+    except Exception as e:
+        print(f"ERROR: {e}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
 
 

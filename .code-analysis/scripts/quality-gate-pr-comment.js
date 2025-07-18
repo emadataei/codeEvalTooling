@@ -1,38 +1,28 @@
 const { getPRNumber, loadResults, createOrUpdateComment } = require('./pr-comment-utils');
 
 module.exports = async ({ github, context }) => {
-  console.log('=== Quality Gate PR Comment Debug ===');
-  console.log('Event name:', context.eventName);
-  console.log('Event type:', context.payload.action);
-  console.log('Has issue context:', !!context.issue);
-  console.log('Has PR context:', !!context.payload.pull_request);
-  
   const prNumber = getPRNumber(context);
-  console.log('Detected PR number:', prNumber);
   
   if (!prNumber) {
     console.log('No PR number found, skipping comment');
     return;
   }
   
-  console.log('Attempting to read quality-gate-results.json...');
   const results = loadResults('quality-gate-results.json', { 
     passed: false, 
     score: 0, 
     summary: 'Failed to load results' 
   });
   
-  if (!results.passed && results.summary === 'Failed to load results') {
-    console.log('Failed to load results, skipping comment');
-    return;
-  }
-  
   const passed = results.passed;
   const score = results.score;
   const status = passed ? 'PASSED' : 'FAILED';
   
   // Build comprehensive, actionable comment
+  const timestamp = new Date().toISOString();
+  const runId = process.env.GITHUB_RUN_ID || 'unknown';
   let comment = `## Code Quality Gate ${status}\n\n`;
+  comment += `*Last updated: ${timestamp} (Run: ${runId})*\n\n`;
   
   // Score and summary with context
   comment += `**Quality Score:** ${score}/100`;
@@ -119,19 +109,21 @@ module.exports = async ({ github, context }) => {
     comment += `1. Fix all critical issues listed above\n`;
     comment += `2. Run quality checks locally before pushing\n`;
     comment += `3. Consider the recommended improvements for better code quality\n\n`;
-    comment += `**Note:** Cognitive analysis will be blocked until these issues are resolved.\n`;
+    comment += `**Note:** Cognitive analysis will still run to provide complexity insights.\n`;
   }
   
-  console.log('Creating PR comment with content length:', comment.length);
-  console.log('Comment preview (first 100 chars):', comment.substring(0, 100));
-  
   // Create or update the comment using shared utility
-  await createOrUpdateComment(
-    github, 
-    context, 
-    prNumber, 
-    comment, 
-    'GitHub Actions Quality Gate',  // identifier to find existing comments
-    'GITHUB_ACTIONS_QUALITY_GATE'  // comment ID for workflow tracking
-  );
+  try {
+    await createOrUpdateComment(
+      github, 
+      context, 
+      prNumber, 
+      comment, 
+      'Code Quality Gate',  // identifier to find existing comments (matches comment header)
+      'QUALITY_GATE_COMMENT'  // unique comment ID for reliable matching
+    );
+  } catch (error) {
+    console.error('Error creating or updating quality gate comment:', error);
+    throw error;
+  }
 };

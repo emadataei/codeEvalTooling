@@ -1,7 +1,8 @@
-const { getPRNumber, loadResults, createOrUpdateComment, setLabels } = require('./pr-comment-utils');
+const { getPRNumber, loadResults, createOrUpdateComment } = require('./pr-comment-utils');
 
 module.exports = async ({ github, context }) => {
   const prNumber = getPRNumber(context);
+  
   if (!prNumber) {
     console.log('No PR number found, skipping comment');
     return;
@@ -12,11 +13,6 @@ module.exports = async ({ github, context }) => {
     total_score: 0, 
     reasoning: 'Failed to load results' 
   });
-  
-  if (results.reasoning === 'Failed to load results') {
-    console.log('Failed to load cognitive analysis results');
-    return;
-  }
   
   const tier = results.tier;
   const score = results.total_score;
@@ -29,7 +25,10 @@ module.exports = async ({ github, context }) => {
   
   const info = tierInfo[tier] || tierInfo[2];
   
+  const timestamp = new Date().toISOString();
+  const runId = process.env.GITHUB_RUN_ID || 'unknown';
   let comment = `## Cognitive Complexity Analysis\n\n`;
+  comment += `*Last updated: ${timestamp} (Run: ${runId})*\n\n`;
   comment += `### ${info.name} - ${info.action}\n\n`;
   comment += `**Complexity Score:** ${score} points (${info.description})\n\n`;
   comment += `**Analysis Summary:** ${results.reasoning}\n\n`;
@@ -46,6 +45,51 @@ module.exports = async ({ github, context }) => {
       comment += `| Quality Penalty | +${results.quality_penalty} | N/A | Applied |\n`;
     }
     comment += `\n`;
+  }
+  
+  // AST Analysis Details
+  if (results.ast_metrics && results.ast_metrics.summary) {
+    const summary = results.ast_metrics.summary;
+    comment += `### AST Analysis Summary\n\n`;
+    comment += `| Metric | Value | Impact |\n`;
+    comment += `|--------|-------|--------|\n`;
+    comment += `| Total Cyclomatic Complexity | ${summary.total_cyclomatic_complexity} | ${summary.total_cyclomatic_complexity > 20 ? 'High' : summary.total_cyclomatic_complexity > 10 ? 'Medium' : 'Low'} |\n`;
+    comment += `| Maximum Nesting Depth | ${summary.max_nesting_depth} | ${summary.max_nesting_depth > 4 ? 'High' : summary.max_nesting_depth > 2 ? 'Medium' : 'Low'} |\n`;
+    comment += `| Total Functions | ${summary.total_functions} | ${summary.total_functions > 10 ? 'High' : summary.total_functions > 5 ? 'Medium' : 'Low'} |\n`;
+    comment += `| Total Control Structures | ${summary.total_control_structures} | ${summary.total_control_structures > 30 ? 'High' : summary.total_control_structures > 15 ? 'Medium' : 'Low'} |\n`;
+    comment += `\n`;
+    
+    // Complex files breakdown
+    if (summary.complex_files && summary.complex_files.length > 0) {
+      comment += `### Complex Files Requiring Attention\n\n`;
+      summary.complex_files.forEach(file => {
+        comment += `**${file.path}** (Score: ${file.score})\n`;
+        comment += `- ${file.main_issues.join('\n- ')}\n\n`;
+      });
+    }
+    
+    // Per-file breakdown for detailed analysis
+    if (results.ast_metrics.files && Object.keys(results.ast_metrics.files).length > 0) {
+      comment += `<details>\n<summary>Detailed File Analysis</summary>\n\n`;
+      
+      Object.values(results.ast_metrics.files).forEach(file => {
+        comment += `**${file.path}** (${file.language})\n`;
+        comment += `- Complexity Score: ${file.total_score}\n`;
+        comment += `- Cyclomatic Complexity: ${file.cyclomatic_complexity}\n`;
+        comment += `- Nesting Depth: ${file.nesting_depth}\n`;
+        comment += `- Functions: ${file.function_count}\n`;
+        comment += `- Control Structures: ${file.control_structures}\n`;
+        if (file.function_length_penalty > 0) {
+          comment += `- Function Length Penalty: +${file.function_length_penalty}\n`;
+        }
+        if (file.file_size_penalty > 0) {
+          comment += `- File Size Penalty: +${file.file_size_penalty}\n`;
+        }
+        comment += `\n`;
+      });
+      
+      comment += `</details>\n\n`;
+    }
   }
   
   // Review guidelines with specific actions
@@ -81,18 +125,17 @@ module.exports = async ({ github, context }) => {
   }
   
   // Create or update the comment
-  await createOrUpdateComment(
-    github, 
-    context, 
-    prNumber, 
-    comment, 
-    'Cognitive Complexity Analysis'  // identifier to find existing comments
-  );
-  
-  // Set labels based on tier
-  const labels = [`tier-${tier}`];
-  if (tier === 0) labels.push('auto-merge-candidate');
-  if (tier === 2) labels.push('needs-expert-review');
-  
-  await setLabels(github, context, prNumber, labels);
+  try {
+    await createOrUpdateComment(
+      github, 
+      context, 
+      prNumber, 
+      comment, 
+      'Cognitive Complexity Analysis',  // identifier to find existing comments
+      'COGNITIVE_ANALYSIS_COMMENT'  // unique comment ID for reliable matching
+    );
+  } catch (error) {
+    console.error('Error creating or updating cognitive analysis comment:', error);
+    throw error;
+  }
 };
