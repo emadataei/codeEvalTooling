@@ -94,6 +94,17 @@ jobs:
         run: |
           python .code-analysis/scripts/ai_pre_review.py
 
+      - name: Generate Semantic Commit Story
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AI_FOUNDRY_ENDPOINT: ${{ secrets.AI_FOUNDRY_ENDPOINT }}
+          AI_FOUNDRY_MODEL: ${{ secrets.AI_FOUNDRY_MODEL }}
+          AI_FOUNDRY_TOKEN: ${{ secrets.AI_FOUNDRY_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          python .code-analysis/scripts/semantic_commit_analyzer.py
+        continue-on-error: true
+
       - name: Analyze UI Changes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -179,4 +190,12 @@ jobs:
         with:
           script: |
             const script = require('./.code-analysis/scripts/cognitive-analysis-pr-comment.js');
+            return await script({ github, context });
+
+      - name: Update PR Description with Change Story
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const script = require('./.code-analysis/scripts/semantic-commit-pr-description.js');
             return await script({ github, context });
