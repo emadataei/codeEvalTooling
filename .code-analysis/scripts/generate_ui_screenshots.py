@@ -105,7 +105,7 @@ class UIScreenshotGenerator:
         # Wait for server to start
         import time
         print("Waiting for development server to start...")
-        time.sleep(15)  # Give server time to start
+        time.sleep(20)  # Give more time for server to start in CI
         
         return process
     
@@ -120,6 +120,7 @@ class UIScreenshotGenerator:
         script_content = f"""
 const {{ chromium }} = require('playwright');
 const path = require('path');
+const fs = require('fs');
 
 (async () => {{
   const browser = await chromium.launch();
@@ -127,21 +128,32 @@ const path = require('path');
   
   try {{
     await page.setViewportSize({{ width: 1280, height: 720 }});
-    await page.goto('http://localhost:3000{page_path}', {{ waitUntil: 'networkidle' }});
+    
+    console.log('Navigating to http://localhost:3000{page_path}...');
+    await page.goto('http://localhost:3000{page_path}', {{ waitUntil: 'networkidle', timeout: 30000 }});
     
     // Wait a bit for dynamic content
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(5000);
+    
+    // Ensure screenshots directory exists
+    const screenshotsDir = path.resolve('../screenshots');
+    if (!fs.existsSync(screenshotsDir)) {{
+      fs.mkdirSync(screenshotsDir, {{ recursive: true }});
+    }}
     
     // Use absolute path for screenshot
-    const screenshotPath = path.resolve('../screenshots/{page_name}.png');
+    const screenshotPath = path.join(screenshotsDir, '{page_name}.png');
+    console.log('Taking screenshot to:', screenshotPath);
+    
     await page.screenshot({{ 
       path: screenshotPath,
       fullPage: true
     }});
     
-    console.log('Screenshot saved: {page_name}.png');
+    console.log('Screenshot saved successfully: {page_name}.png');
   }} catch (error) {{
     console.error('Error capturing {page_name}:', error.message);
+    console.error('Stack:', error.stack);
   }} finally {{
     await browser.close();
   }}
@@ -211,6 +223,22 @@ const path = require('path');
         
         try:
             dev_server = self._start_dev_server()
+            
+            # Verify server is responding
+            print("Verifying development server is ready...")
+            import requests
+            import time
+            for i in range(10):  # Try for 10 seconds
+                try:
+                    response = requests.get("http://localhost:3000", timeout=5)
+                    if response.status_code == 200:
+                        print("✅ Development server is responding")
+                        break
+                except Exception:
+                    if i == 9:
+                        print("❌ Development server not responding after 10 attempts")
+                        return []
+                    time.sleep(1)
             
             # Generate screenshots
             for page in pages:
