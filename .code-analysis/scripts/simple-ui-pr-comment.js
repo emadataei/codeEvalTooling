@@ -5,13 +5,13 @@ function buildSimpleUIComment(results, prNumber, runId, repoName) {
     return null; // No comment needed
   }
   
-  let comment = `## 🎨 UI Changes Detected\n\n`;
+  let comment = `## UI Changes Detected\n\n`;
   
   // Show UI file changes by category in a clean format
   comment += `**Files Changed:** ${results.ui_files_count}\n\n`;
   
   if (results.categories.components.length > 0) {
-    comment += `**🧩 Components:**\n`;
+    comment += `**Components:**\n`;
     results.categories.components.forEach(file => {
       comment += `- \`${file}\`\n`;
     });
@@ -19,7 +19,7 @@ function buildSimpleUIComment(results, prNumber, runId, repoName) {
   }
   
   if (results.categories.pages.length > 0) {
-    comment += `**📄 Pages:**\n`;
+    comment += `**Pages:**\n`;
     results.categories.pages.forEach(file => {
       comment += `- \`${file}\`\n`;
     });
@@ -27,7 +27,7 @@ function buildSimpleUIComment(results, prNumber, runId, repoName) {
   }
   
   if (results.categories.styles.length > 0) {
-    comment += `**🎨 Styles:**\n`;
+    comment += `**Styles:**\n`;
     results.categories.styles.forEach(file => {
       comment += `- \`${file}\`\n`;
     });
@@ -36,12 +36,6 @@ function buildSimpleUIComment(results, prNumber, runId, repoName) {
   
   // Add embedded screenshots if available
   comment += addEmbeddedScreenshots();
-  
-  // Add fallback artifact link
-  if (runId && repoName) {
-    comment += `**� Backup Download:**\n`;
-    comment += `[Download UI Screenshots](https://github.com/${repoName}/actions/runs/${runId}/artifacts) - Look for \`ui-screenshots-pr-${prNumber}\`\n\n`;
-  }
   
   // Simple review checklist
   comment += `**Review Focus:**\n`;
@@ -59,12 +53,12 @@ function addEmbeddedScreenshots() {
     const fs = require('fs');
     const screenshotData = JSON.parse(fs.readFileSync('screenshot_urls.json', 'utf8'));
     
-    let screenshotsSection = `**📸 Visual Preview:**\n\n`;
+    let screenshotsSection = `**Visual Preview:**\n\n`;
     
     Object.entries(screenshotData).forEach(([filename, dataUrl]) => {
       const pageName = filename.replace('.png', '').replace('_', ' ');
-      screenshotsSection += `### ${pageName}\n`;
-      screenshotsSection += `![${pageName}](${dataUrl})\n\n`;
+      screenshotsSection += `**${pageName}:**\n\n`;
+      screenshotsSection += `<img src="${dataUrl}" alt="${pageName}" width="800">\n\n`;
     });
     
     return screenshotsSection;
