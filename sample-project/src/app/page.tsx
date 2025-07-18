@@ -1,3 +1,4 @@
+'use client'
 // This file has intentional quality issues for testing
 // TODO: Added test comment to trigger change detection 
 // Additional comment to test quality gate comment updates
@@ -5,14 +6,14 @@
 import { useState } from 'react'
 
 // Missing interface definition - should trigger type safety warning
-function UserCard(props) {
+function UserCard(props: any) {
   const [isLoading, setIsLoading] = useState(false)
   
   // Hardcoded API key - should trigger security blocking issue
   const API_KEY = "sk-1234567890abcdef-secret-key-hardcoded"
   
   // Function without proper error handling
-  const fetchUserData = async (userId) => {
+  const fetchUserData = async (userId: any) => {
     const response = await fetch(`/api/users/${userId}`, {
       headers: { 'Authorization': `Bearer ${API_KEY}` }
     })
@@ -24,14 +25,14 @@ function UserCard(props) {
   console.log('UserCard props:', props)
   
   // Complex function that should trigger complexity warning
-  const processUserPermissions = (user, permissions, roles, groups, settings) => {
-    let result = {}
+  const processUserPermissions = (user: any, permissions: any, roles: any, groups: any, settings: any) => {
+    let result: any = {}
     if (user && user.id) {
       if (permissions && permissions.length > 0) {
         for (let i = 0; i < permissions.length; i++) {
           if (permissions[i].active) {
             if (roles && roles.includes(permissions[i].role)) {
-              if (groups && groups.some(g => g.id === permissions[i].groupId)) {
+              if (groups && groups.some((g: any) => g.id === permissions[i].groupId)) {
                 if (settings && settings.allowPermissionOverride) {
                   result[permissions[i].name] = true
                 } else {

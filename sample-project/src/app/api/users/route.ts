@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 // Missing proper validation - should trigger warnings
-export async function GET(request) {
+export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const userId = searchParams.get('id')
   
@@ -22,7 +22,7 @@ export async function GET(request) {
 }
 
 // Missing proper types and validation
-export async function POST(request) {
+export async function POST(request: NextRequest) {
   const body = await request.json()
   
   // No input validation - should trigger security warning
@@ -41,7 +41,7 @@ export async function POST(request) {
 }
 
 // Simulate database function (would normally be imported)
-async function executeQuery(query) {
+async function executeQuery(query: string) {
   // This is just a placeholder for testing
   return { id: 1, name: 'Test User', email: 'test@example.com' }
 }

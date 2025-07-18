@@ -16,12 +16,13 @@ class UIScreenshotGenerator:
     """Generates screenshots of UI changes for visual review."""
     
     def __init__(self):
-        self.screenshots_dir = Path("screenshots")
+        # Always use absolute path for screenshots directory in the root
+        self.screenshots_dir = Path(os.getcwd()) / "screenshots"
         self.screenshots_dir.mkdir(exist_ok=True)
         
-        # Get project info
+        # Get project info - use absolute path
         self.pr_number = os.getenv('PR_NUMBER', '0')
-        self.project_dir = Path("sample-project")
+        self.project_dir = Path(os.getcwd()) / "sample-project"
         
         # Load UI analysis results
         self.analysis_results = self._load_analysis_results()
@@ -89,9 +90,12 @@ class UIScreenshotGenerator:
         """Start the development server for screenshot generation."""
         print("Starting development server...")
         
-        # Change to project directory and start server
+        # Use .cmd extension on Windows
+        npm_cmd = 'npm.cmd' if os.name == 'nt' else 'npm'
+        
+        # Start the development server
         process = subprocess.Popen(
-            ['npm', 'run', 'dev'],
+            [npm_cmd, 'run', 'dev'],
             cwd=self.project_dir,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -100,7 +104,8 @@ class UIScreenshotGenerator:
         
         # Wait for server to start
         import time
-        time.sleep(10)  # Give server time to start
+        print("Waiting for development server to start...")
+        time.sleep(15)  # Give server time to start
         
         return process
     
@@ -109,9 +114,12 @@ class UIScreenshotGenerator:
         page_name = page['name']
         page_path = page['path']
         
-        # Create playwright script
-        playwright_script = f"""
+        print(f"Capturing screenshot for {page['description']}...")
+        
+        # Create simple node script that runs from the project directory
+        script_content = f"""
 const {{ chromium }} = require('playwright');
+const path = require('path');
 
 (async () => {{
   const browser = await chromium.launch();
@@ -122,10 +130,12 @@ const {{ chromium }} = require('playwright');
     await page.goto('http://localhost:3000{page_path}', {{ waitUntil: 'networkidle' }});
     
     // Wait a bit for dynamic content
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(3000);
     
+    // Use absolute path for screenshot
+    const screenshotPath = path.resolve('../screenshots/{page_name}.png');
     await page.screenshot({{ 
-      path: 'screenshots/{page_name}.png',
+      path: screenshotPath,
       fullPage: true
     }});
     
@@ -138,14 +148,16 @@ const {{ chromium }} = require('playwright');
 }})();
 """
         
-        # Write and execute the script
-        script_path = self.screenshots_dir / f"{page_name}_screenshot.js"
+        # Write the script to the project directory
+        script_path = self.project_dir / f"{page_name}_screenshot.js"
         with open(script_path, 'w') as f:
-            f.write(playwright_script)
+            f.write(script_content)
         
         try:
+            # Run the script from the project directory where node_modules is
             result = subprocess.run(
-                ['node', str(script_path)],
+                ['node', f"{page_name}_screenshot.js"],
+                cwd=self.project_dir,
                 capture_output=True,
                 text=True,
                 timeout=30
@@ -158,8 +170,10 @@ const {{ chromium }} = require('playwright');
                     return str(screenshot_path)
                 else:
                     print(f"❌ Screenshot file not found: {page_name}.png")
+                    print(f"stdout: {result.stdout}")
             else:
                 print(f"❌ Screenshot failed for {page_name}: {result.stderr}")
+                print(f"stdout: {result.stdout}")
         
         except subprocess.TimeoutExpired:
             print(f"❌ Screenshot timeout for {page_name}")
@@ -186,6 +200,11 @@ const {{ chromium }} = require('playwright');
         
         print(f"Generating screenshots for {len(pages)} pages...")
         
+        # Ensure Playwright is available
+        if not self._ensure_playwright_installed():
+            print("❌ Failed to install Playwright. Skipping screenshots.")
+            return []
+        
         # Start development server
         dev_server = None
         screenshots = []
@@ -195,7 +214,6 @@ const {{ chromium }} = require('playwright');
             
             # Generate screenshots
             for page in pages:
-                print(f"Capturing screenshot for {page['description']}...")
                 screenshot_path = self._generate_screenshot(page)
                 if screenshot_path:
                     screenshots.append(screenshot_path)
@@ -213,6 +231,40 @@ const {{ chromium }} = require('playwright');
         self._upload_to_github_comments(screenshots)
         
         return screenshots
+    
+    def _ensure_playwright_installed(self):
+        """Ensure Playwright is installed and available."""
+        # Check if playwright is already installed in the project
+        playwright_path = self.project_dir / 'node_modules' / 'playwright'
+        
+        if playwright_path.exists():
+            print("Playwright is already installed in project")
+            return True
+        
+        # Use .cmd extensions on Windows
+        npm_cmd = 'npm.cmd' if os.name == 'nt' else 'npm'
+        npx_cmd = 'npx.cmd' if os.name == 'nt' else 'npx'
+        
+        print(f"Installing Playwright in {self.project_dir}...")
+        
+        try:
+            # Install playwright in the project directory
+            subprocess.run([npm_cmd, 'install', 'playwright'], 
+                          cwd=self.project_dir, check=True, timeout=60)
+            
+            # Install chromium browser
+            subprocess.run([npx_cmd, 'playwright', 'install', 'chromium'], 
+                          cwd=self.project_dir, check=True, timeout=120)
+            
+            print("Playwright installed successfully")
+            return True
+            
+        except subprocess.CalledProcessError as e:
+            print(f"Failed to install Playwright: {e}")
+            return False
+        except Exception as e:
+            print(f"Error installing Playwright: {e}")
+            return False
     
     def _generate_manifest(self, screenshots: List[str], pages: List[Dict]):
         """Generate a manifest of all screenshots."""
