@@ -8,7 +8,3 @@ pylint
 # Additional analysis dependencies
 requests
 pathlib2; python_version < '3.4'
-
-# Visual diff dependencies (optional)
-requests>=2.31.0
-playwright>=1.40.0
