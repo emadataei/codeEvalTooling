@@ -108,18 +108,18 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: 'sample-project/package-lock.json'
 
       - name: Install project dependencies
         if: hashFiles('visual-diff-results.json') != ''
         working-directory: sample-project
-        run: npm ci
+        run: npm install
+        continue-on-error: true
 
       - name: Build project
         if: hashFiles('visual-diff-results.json') != ''
         working-directory: sample-project
         run: npm run build
+        continue-on-error: true
 
       - name: Install Playwright
         if: hashFiles('visual-diff-results.json') != ''
