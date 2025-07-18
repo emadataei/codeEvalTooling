@@ -106,8 +106,8 @@ module.exports = async ({ github, context }) => {
     github,
     context,
     prNumber,
-    'UI Changes Detected',
-    commentBody
+    commentBody,
+    'UI Changes Detected'
   );
   
   console.log('UI changes comment posted successfully');
