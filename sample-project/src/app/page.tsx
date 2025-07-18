@@ -1,78 +1,104 @@
 'use client'
-// This file has intentional quality issues for testing
-// TODO: Added test comment to trigger change detection 
-// Additional comment to test quality gate comment updates
-// Debug: Fixed label conflicts - only update_pr_metadata.py sets labels (debug-9)
+// Updated demo page to showcase new user profile features
 import { useState } from 'react'
+import { UserProfile } from '../components/UserProfile'
 
-// Missing interface definition - should trigger type safety warning
-function UserCard(props: any) {
+interface UserCardProps {
+  readonly userId?: string
+  readonly title: string
+  readonly variant?: 'primary' | 'secondary'
+}
+
+function UserCard({ userId, title, variant = 'primary' }: UserCardProps) {
   const [isLoading, setIsLoading] = useState(false)
   
-  // Hardcoded API key - should trigger security blocking issue
-  const API_KEY = "sk-1234567890abcdef-secret-key-hardcoded"
+  // Use environment variable for API configuration
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api'
   
-  // Function without proper error handling
-  const fetchUserData = async (userId: any) => {
-    const response = await fetch(`/api/users/${userId}`, {
-      headers: { 'Authorization': `Bearer ${API_KEY}` }
-    })
-    const data = await response.json()
-    return data
-  }
-  
-  // Debug statement that should be flagged
-  console.log('UserCard props:', props)
-  
-  // Complex function that should trigger complexity warning
-  const processUserPermissions = (user: any, permissions: any, roles: any, groups: any, settings: any) => {
-    let result: any = {}
-    if (user && user.id) {
-      if (permissions && permissions.length > 0) {
-        for (let i = 0; i < permissions.length; i++) {
-          if (permissions[i].active) {
-            if (roles && roles.includes(permissions[i].role)) {
-              if (groups && groups.some((g: any) => g.id === permissions[i].groupId)) {
-                if (settings && settings.allowPermissionOverride) {
-                  result[permissions[i].name] = true
-                } else {
-                  result[permissions[i].name] = permissions[i].defaultValue
-                }
-              }
-            }
-          }
-        }
+  // Improved function with proper error handling
+  const fetchUserData = async (id: string) => {
+    try {
+      const response = await fetch(`${apiUrl}/users/${id}`)
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
       }
+      const data = await response.json()
+      return data
+    } catch (error) {
+      console.error('Failed to fetch user data:', error)
+      throw error
     }
-    return result
   }
-  
+
+  const handleSaveUser = async (formData: FormData) => {
+    setIsLoading(true)
+    try {
+      // Process form data
+      const userData = {
+        name: formData.get('name') as string,
+        email: formData.get('email') as string,
+      }
+      
+      if (userId) {
+        await fetch(`${apiUrl}/users/${userId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(userData)
+        })
+      }
+      
+      console.log('User saved successfully')
+    } catch (error) {
+      console.error('Failed to save user:', error)
+      throw error
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   return (
     <div className="user-card">
-      <h2>{props.name}</h2>
-      <p>{props.email}</p>
+      <UserProfile
+        title={title}
+        onSave={handleSaveUser}
+        variant={variant}
+        userId={userId}
+      />
       {isLoading && <span>Loading...</span>}
     </div>
   )
 }
 
-// Proper Next.js page component
+// Proper Next.js page component  
 export default function HomePage() {
   return (
     <main style={{padding: '2rem', minHeight: '100vh', backgroundColor: '#f0f0f0'}}>
-      <h1 style={{color: '#333', marginBottom: '2rem'}}>Code Evaluation Demo</h1>
-      <p style={{color: '#666', marginBottom: '1rem'}}>This is a sample Next.js application for testing UI changes.</p>
+      <h1 style={{color: '#333', marginBottom: '2rem'}}>Enhanced User Profile Demo</h1>
+      <p style={{color: '#666', marginBottom: '1rem'}}>
+        Updated sample application showcasing new user profile features with data loading.
+      </p>
+      
       <UserCard 
-        name="John Doe" 
-        email="john.doe@example.com" 
+        userId="1"
+        title="Edit User Profile"
+        variant="primary"
       />
+      
+      <div style={{marginTop: '2rem'}}>
+        <UserCard 
+          title="Create New User"
+          variant="secondary"
+        />
+      </div>
+      
       <div style={{marginTop: '2rem', padding: '1rem', border: '1px solid #ddd', borderRadius: '8px'}}>
-        <h3>Features to test:</h3>
+        <h3>New Features Implemented:</h3>
         <ul>
-          <li>Visual diff detection</li>
-          <li>Component changes</li>
-          <li>Style modifications</li>
-          <li>Layout updates</li>
+          <li>User data loading from API</li>
+          <li>Enhanced form handling</li>
+          <li>Improved accessibility</li>
+          <li>Better error handling</li>
+          <li>Updated styling with animations</li>
         </ul>
       </div>
     </main>
