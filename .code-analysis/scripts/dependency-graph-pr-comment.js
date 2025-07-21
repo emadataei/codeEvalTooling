@@ -22,7 +22,7 @@ module.exports = async ({ github, context }) => {
   const htmlGraphExists = fs.existsSync('dependency_graph.html');
   
   // Build the comment
-  let comment = `## 🕸️ Dependency Graph Analysis\n\n`;
+  let comment = `## Dependency Graph Analysis\n\n`;
   
   // Overview stats
   comment += `**Files Analyzed:** ${results.total_files_analyzed} | `;
@@ -30,36 +30,34 @@ module.exports = async ({ github, context }) => {
   
   // High-impact changes
   if (results.high_impact_changes && results.high_impact_changes.length > 0) {
-    comment += `**🚨 High-Impact Changes:**\n`;
+    comment += `**High-Impact Changes:**\n`;
     results.high_impact_changes.slice(0, 3).forEach(change => {
-      const changeEmoji = getChangeEmoji(change.change_type);
-      comment += `${changeEmoji} **${change.file_name}** (${change.change_type})\n`;
+      comment += `**${change.file_name}** (${change.change_type.toUpperCase()})\n`;
       comment += `   Impact Score: ${change.impact_score} dependencies affected\n\n`;
     });
   }
   
   // Circular dependencies warning
   if (results.circular_dependencies && results.circular_dependencies.length > 0) {
-    comment += `**⚠️ Circular Dependencies Detected:**\n`;
+    comment += `**Circular Dependencies Detected:**\n`;
     results.circular_dependencies.slice(0, 3).forEach(cycle => {
-      comment += `🔄 ${cycle.join(' → ')}\n`;
+      comment += `${cycle.join(' → ')}\n`;
     });
     comment += `\n`;
   }
   
   // Interactive graph link
   if (htmlGraphExists) {
-    comment += `**📊 Interactive Visualization:**\n`;
+    comment += `**Interactive Visualization:**\n`;
     comment += `[View Dependency Graph](./dependency_graph.html) - Download and open in browser\n\n`;
   }
   
   // Change summary by type
   const changesByType = groupChangesByType(results.changes);
   if (Object.keys(changesByType).length > 0) {
-    comment += `**📁 Changes by Type:**\n`;
+    comment += `**Changes by Type:**\n`;
     Object.entries(changesByType).forEach(([type, changes]) => {
-      const emoji = getChangeEmoji(type);
-      comment += `${emoji} **${type.toUpperCase()}**: ${changes.length} files\n`;
+      comment += `**${type.toUpperCase()}**: ${changes.length} files\n`;
     });
     comment += `\n`;
   }
@@ -68,9 +66,9 @@ module.exports = async ({ github, context }) => {
   if (results.changes.length > 0) {
     const affectedModules = extractAffectedModules(results.changes);
     if (affectedModules.length > 0) {
-      comment += `**🏗️ Affected Modules:**\n`;
+      comment += `**Affected Modules:**\n`;
       affectedModules.slice(0, 5).forEach(module => {
-        comment += `📦 ${module}\n`;
+        comment += `${module}\n`;
       });
       if (affectedModules.length > 5) {
         comment += `   ... and ${affectedModules.length - 5} more\n`;
@@ -80,13 +78,12 @@ module.exports = async ({ github, context }) => {
   }
   
   // Detailed breakdown
-  comment += `<details>\n<summary>📋 View Detailed Changes</summary>\n\n`;
+  comment += `<details>\n<summary>View Detailed Changes</summary>\n\n`;
   
   if (results.changes.length > 0) {
     comment += `**All File Changes:**\n`;
     results.changes.forEach(change => {
-      const emoji = getChangeEmoji(change.change_type);
-      comment += `${emoji} **${change.file_path}** (${change.change_type})\n`;
+      comment += `**${change.file_path}** (${change.change_type.toUpperCase()})\n`;
       
       if (change.dependencies_before && change.dependencies_after) {
         const depsBefore = change.dependencies_before.length;
@@ -112,28 +109,28 @@ module.exports = async ({ github, context }) => {
   // Graph generation status
   comment += `**Graph Generation:**\n`;
   if (results.graph_generated) {
-    comment += `✅ Dependency graph generated successfully\n`;
+    comment += `Dependency graph generated successfully\n`;
     if (htmlGraphExists) {
-      comment += `📊 Interactive HTML visualization available\n`;
+      comment += `Interactive HTML visualization available\n`;
     }
   } else {
-    comment += `❌ Graph generation failed or skipped\n`;
+    comment += `Graph generation failed or skipped\n`;
   }
   
   comment += `\n</details>`;
   
   // Recommendations based on findings
   if (results.circular_dependencies && results.circular_dependencies.length > 0) {
-    comment += `\n💡 **Recommendations:**\n`;
-    comment += `🔄 **Circular Dependencies**: Consider refactoring to break cycles\n`;
+    comment += `\n**Recommendations:**\n`;
+    comment += `**Circular Dependencies**: Consider refactoring to break cycles\n`;
   }
   
   if (results.high_impact_changes && results.high_impact_changes.length > 3) {
-    comment += `⚠️ **High Impact**: Many files affected - consider breaking into smaller changes\n`;
+    comment += `**High Impact**: Many files affected - consider breaking into smaller changes\n`;
   }
   
   if (results.changes.length === 0) {
-    comment += `\n✅ **Good news!** No significant dependency changes detected.`;
+    comment += `\n**Good news!** No significant dependency changes detected.`;
   }
   
   // Post or update the comment
@@ -142,22 +139,12 @@ module.exports = async ({ github, context }) => {
     context, 
     prNumber, 
     comment, 
-    '🕸️ Dependency Graph Analysis',
+    'Dependency Graph Analysis',
     `dependency-graph-${context.payload?.pull_request?.head?.sha || 'unknown'}`
   );
   
   console.log('Dependency graph comment posted/updated successfully');
 };
-
-function getChangeEmoji(changeType) {
-  const emojis = {
-    'added': '✅',
-    'modified': '📝',
-    'deleted': '❌',
-    'renamed': '🔄'
-  };
-  return emojis[changeType] || '📄';
-}
 
 function groupChangesByType(changes) {
   const grouped = {};

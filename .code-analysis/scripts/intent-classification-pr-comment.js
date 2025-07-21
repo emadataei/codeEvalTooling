@@ -28,38 +28,31 @@ module.exports = async ({ github, context }) => {
   });
   
   // Build the comment
-  let comment = `## 🎯 Intent Classification Analysis\n\n`;
+  let comment = `## Intent Classification Analysis\n\n`;
   
   // Primary intent with confidence
-  const confidenceEmoji = results.confidence > 0.8 ? '🟢' : results.confidence > 0.5 ? '🟡' : '🔴';
-  const intentEmoji = getIntentEmoji(results.primary_intent);
-  comment += `${intentEmoji} **Primary Intent:** ${results.primary_intent.toUpperCase()} ${confidenceEmoji} *${Math.round(results.confidence * 100)}% confidence*\n\n`;
+  let confidenceIndicator;
+  if (results.confidence > 0.8) {
+    confidenceIndicator = 'HIGH';
+  } else if (results.confidence > 0.5) {
+    confidenceIndicator = 'MEDIUM';
+  } else {
+    confidenceIndicator = 'LOW';
+  }
+  comment += `**Primary Intent:** ${results.primary_intent.toUpperCase()} (${confidenceIndicator} confidence: ${Math.round(results.confidence * 100)}%)\n\n`;
   
   // Secondary intents if available
   if (results.secondary_intents && results.secondary_intents.length > 0) {
     comment += `**Secondary Patterns:**\n`;
     results.secondary_intents.slice(0, 2).forEach(([intent, confidence]) => {
-      const secEmoji = getIntentEmoji(intent);
-      comment += `${secEmoji} ${intent.toUpperCase()} (${Math.round(confidence * 100)}%)\n`;
+      comment += `- ${intent.toUpperCase()} (${Math.round(confidence * 100)}%)\n`;
     });
     comment += `\n`;
   }
   
   // Affected areas
   if (results.affected_areas && results.affected_areas.length > 0) {
-    const areaEmojis = {
-      'ui': '🎨',
-      'api': '🔌',
-      'database': '🗄️',
-      'authentication': '🔐',
-      'testing': '🧪',
-      'configuration': '⚙️',
-      'documentation': '📚'
-    };
-    
-    const areas = results.affected_areas.map(area => 
-      `${areaEmojis[area] || '📁'} ${area}`
-    ).join(', ');
+    const areas = results.affected_areas.join(', ');
     comment += `**Affected Areas:** ${areas}\n\n`;
   }
   
@@ -101,10 +94,10 @@ module.exports = async ({ github, context }) => {
   
   // Add helpful context for low confidence
   if (results.confidence < 0.6) {
-    comment += `⚠️ *Low confidence classification. Consider adding more descriptive PR title/description for better analysis.*\n\n`;
+    comment += `**Note:** Low confidence classification. Consider adding more descriptive PR title/description for better analysis.\n\n`;
   }
   
-  comment += `<details>\n<summary>📊 View Detailed Metrics</summary>\n\n`;
+  comment += `<details>\n<summary>View Detailed Metrics</summary>\n\n`;
   comment += `**Files by Change Type:**\n`;
   comment += `- Added: ${fileChanges.files_added}\n`;
   comment += `- Modified: ${fileChanges.files_modified}\n`;
@@ -124,27 +117,9 @@ module.exports = async ({ github, context }) => {
     context, 
     prNumber, 
     comment, 
-    '🎯 Intent Classification Analysis',
+    'Intent Classification Analysis',
     `intent-classification-${context.payload?.pull_request?.head?.sha || 'unknown'}`
   );
   
   console.log('Intent classification comment posted/updated successfully');
 };
-
-function getIntentEmoji(intent) {
-  const emojis = {
-    'feature': '✨',
-    'bugfix': '🐛',
-    'refactor': '♻️',
-    'performance': '⚡',
-    'security': '🔒',
-    'documentation': '📚',
-    'testing': '🧪',
-    'configuration': '⚙️',
-    'dependency': '📦',
-    'maintenance': '🔧',
-    'style': '💄',
-    'architecture': '🏗️'
-  };
-  return emojis[intent] || '📝';
-}
