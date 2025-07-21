@@ -8,3 +8,13 @@ pylint
 # Additional analysis dependencies
 requests
 pathlib2; python_version < '3.4'
+
+# AI-enhanced analysis tools
+# For Python AST parsing and code analysis
+ast-decompiler
+
+# For dependency graph visualization (optional - requires Graphviz installation)
+# graphviz
+
+# For enhanced regex patterns in TypeScript/JavaScript analysis
+regex
