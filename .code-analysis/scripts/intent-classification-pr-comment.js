@@ -7,8 +7,7 @@ module.exports = async ({ github, context }) => {
     console.log('No PR number found, skipping intent classification comment');
     return;
   }
-  
-  // Load intent classification results
+
   const results = loadResults('intent-classification-results.json', { 
     primary_intent: 'maintenance',
     confidence: 0.3,
@@ -26,100 +25,72 @@ module.exports = async ({ github, context }) => {
       total_lines_removed: 0
     }
   });
+
+  const comment = buildComment(results);
   
-  // Build the comment
-  let comment = `## Intent Classification Analysis\n\n`;
-  
-  // Primary intent with confidence
-  let confidenceIndicator;
-  if (results.confidence > 0.8) {
-    confidenceIndicator = 'HIGH';
-  } else if (results.confidence > 0.5) {
-    confidenceIndicator = 'MEDIUM';
-  } else {
-    confidenceIndicator = 'LOW';
-  }
-  comment += `**Primary Intent:** ${results.primary_intent.toUpperCase()} (${confidenceIndicator} confidence: ${Math.round(results.confidence * 100)}%)\n\n`;
-  
-  // Secondary intents if available
-  if (results.secondary_intents && results.secondary_intents.length > 0) {
-    comment += `**Secondary Patterns:**\n`;
-    results.secondary_intents.slice(0, 2).forEach(([intent, confidence]) => {
-      comment += `- ${intent.toUpperCase()} (${Math.round(confidence * 100)}%)\n`;
-    });
-    comment += `\n`;
-  }
-  
-  // Affected areas
-  if (results.affected_areas && results.affected_areas.length > 0) {
-    const areas = results.affected_areas.join(', ');
-    comment += `**Affected Areas:** ${areas}\n\n`;
-  }
-  
-  // File changes summary
-  const fileChanges = results.file_changes_summary;
-  const totalChanges = fileChanges.total_lines_added + fileChanges.total_lines_removed;
-  if (totalChanges > 0) {
-    comment += `**Change Scope:** ${fileChanges.total_files} files, `;
-    comment += `+${fileChanges.total_lines_added}/-${fileChanges.total_lines_removed} lines\n\n`;
-  }
-  
-  // Reasoning (truncated for readability)
-  if (results.reasoning && results.reasoning !== 'Intent classification analysis failed') {
-    const reasoning = results.reasoning.length > 300 
-      ? results.reasoning.substring(0, 300) + '...' 
-      : results.reasoning;
-    comment += `**Analysis Reasoning:**\n${reasoning}\n\n`;
-  }
-  
-  // Business impact if meaningful
-  if (results.business_impact && 
-      results.business_impact !== 'Unable to determine without AI analysis' &&
-      results.business_impact !== 'Unknown') {
-    const impact = results.business_impact.length > 200 
-      ? results.business_impact.substring(0, 200) + '...' 
-      : results.business_impact;
-    comment += `**Business Impact:**\n${impact}\n\n`;
-  }
-  
-  // Technical details if available
-  if (results.technical_details && 
-      results.technical_details !== 'Manual review required for detailed analysis' &&
-      results.technical_details !== 'Unknown') {
-    const details = results.technical_details.length > 200 
-      ? results.technical_details.substring(0, 200) + '...' 
-      : results.technical_details;
-    comment += `**Technical Details:**\n${details}\n\n`;
-  }
-  
-  // Add helpful context for low confidence
-  if (results.confidence < 0.6) {
-    comment += `**Note:** Low confidence classification. Consider adding more descriptive PR title/description for better analysis.\n\n`;
-  }
-  
-  comment += `<details>\n<summary>View Detailed Metrics</summary>\n\n`;
-  comment += `**Files by Change Type:**\n`;
-  comment += `- Added: ${fileChanges.files_added}\n`;
-  comment += `- Modified: ${fileChanges.files_modified}\n`;
-  comment += `- Deleted: ${fileChanges.files_deleted}\n\n`;
-  
-  if (results.secondary_intents && results.secondary_intents.length > 0) {
-    comment += `**All Secondary Intents:**\n`;
-    results.secondary_intents.forEach(([intent, confidence]) => {
-      comment += `- ${intent.toUpperCase()}: ${Math.round(confidence * 100)}%\n`;
-    });
-  }
-  comment += `\n</details>`;
-  
-  // Post or update the comment
   await createOrUpdateComment(
     github, 
     context, 
     prNumber, 
     comment, 
-    'Intent Classification Analysis',
+    'Intent Classification',
     `intent-classification-${context.payload?.pull_request?.head?.sha || 'unknown'}`
   );
   
   console.log('Intent classification comment posted/updated successfully');
 };
+
+function buildComment(results) {
+  let comment = `## Intent Classification\n\n`;
+  
+  // Primary intent - concise format
+  const confidenceLevel = getConfidenceLevel(results.confidence);
+  comment += `**${results.primary_intent.toUpperCase()}** (${confidenceLevel}: ${Math.round(results.confidence * 100)}%)\n\n`;
+  
+  // Secondary intents - compact format
+  if (results.secondary_intents && results.secondary_intents.length > 0) {
+    comment += `**Secondary:** `;
+    const secondaryList = results.secondary_intents.slice(0, 2)
+      .map(([intent, conf]) => `${intent.toUpperCase()} (${Math.round(conf * 100)}%)`)
+      .join(', ');
+    comment += secondaryList + `\n\n`;
+  }
+  
+  // Key metrics - one line
+  const fileChanges = results.file_changes_summary;
+  comment += `**Scope:** ${fileChanges.total_files} files, +${fileChanges.total_lines_added}/-${fileChanges.total_lines_removed} lines\n\n`;
+  
+  // Areas - compact format
+  if (results.affected_areas && results.affected_areas.length > 0) {
+    const areas = results.affected_areas.join(', ');
+    comment += `**Areas:** ${areas}\n\n`;
+  }
+
+  // Only show reasoning if it's meaningful and short
+  if (shouldShowReasoning(results.reasoning)) {
+    const shortReason = results.reasoning.length > 120 
+      ? results.reasoning.substring(0, 120) + '...' 
+      : results.reasoning;
+    comment += `**Why:** ${shortReason}\n\n`;
+  }
+
+  // Low confidence warning
+  if (results.confidence < 0.6) {
+    comment += `**Note:** Low confidence - add more descriptive PR title/description\n\n`;
+  }
+
+  return comment;
+}
+
+function getConfidenceLevel(confidence) {
+  if (confidence > 0.8) return 'HIGH';
+  if (confidence > 0.5) return 'MEDIUM';
+  return 'LOW';
+}
+
+function shouldShowReasoning(reasoning) {
+  return reasoning && 
+         reasoning !== 'Intent classification analysis failed' &&
+         reasoning !== 'Rule-based classification based on PR title pattern' &&
+         reasoning.length > 20;
+}
