@@ -32,51 +32,58 @@ module.exports = async ({ github, context }) => {
 };
 
 function buildComment(results) {
-  let comment = `## Dependencies\n\n`;
+  let comment = `## Dependency Analysis\n\n`;
   
-  // Quick overview
-  comment += `**${results.total_files_analyzed}** files analyzed | **${results.changes.length}** changes\n\n`;
+  // Overview metrics
+  comment += `**Analysis Summary:** ${results.total_files_analyzed} files | ${results.changes.length} changes\n\n`;
 
-  // High-impact changes only
+  // High-impact changes in structured table
   if (results.high_impact_changes && results.high_impact_changes.length > 0) {
-    comment += `**High Impact:**\n`;
+    comment += `### High Impact Changes\n`;
+    comment += `| Type | File | Dependencies Affected |\n`;
+    comment += `|------|------|-----------------------|\n`;
     results.high_impact_changes.slice(0, 3).forEach(change => {
       const changeType = getChangeType(change.change_type);
-      comment += `**${changeType}** ${change.file_name} (${change.impact_score} deps affected)\n`;
+      comment += `| ${changeType} | \`${change.file_name}\` | ${change.impact_score} |\n`;
     });
     comment += `\n`;
   }
 
-  // Circular dependencies warning
+  // Circular dependencies with clear warning
   if (results.circular_dependencies && results.circular_dependencies.length > 0) {
-    comment += `**Circular Dependencies:**\n`;
+    comment += `### ⚠ Circular Dependencies Detected\n`;
+    comment += `\`\`\`\n`;
     results.circular_dependencies.slice(0, 2).forEach(cycle => {
-      comment += `CYCLE: ${cycle.join(' → ')}\n`;
+      comment += `${cycle.join(' → ')}\n`;
     });
-    comment += `\n`;
+    comment += `\`\`\`\n\n`;
   }
 
-  // Change summary - compact
+  // Change summary - organized by type
   const changesByType = groupChangesByType(results.changes);
   if (Object.keys(changesByType).length > 0) {
-    const summary = Object.entries(changesByType)
-      .map(([type, changes]) => `${getChangeType(type)} ${changes.length} ${type}`)
-      .join(', ');
-    comment += `**Changes:** ${summary}\n\n`;
+    comment += `**Change Breakdown:**\n`;
+    Object.entries(changesByType).forEach(([type, changes]) => {
+      comment += `- ${getChangeType(type)}: ${changes.length}\n`;
+    });
+    comment += `\n`;
   }
 
-  // Interactive graph if available
+  // Interactive graph reference
   if (fs.existsSync('dependency_graph.html')) {
-    comment += `[View Interactive Graph](./dependency_graph.html)\n\n`;
+    comment += `📊 **[View Interactive Dependency Graph](./dependency_graph.html)**\n\n`;
   }
 
-  // Quick recommendations
+  // Recommendations with action items
   if (results.circular_dependencies && results.circular_dependencies.length > 0) {
-    comment += `**Recommendation:** Fix circular dependencies before merge\n`;
+    comment += `> **Action Required:** Resolve circular dependencies before merge\n`;
   }
   if (results.high_impact_changes && results.high_impact_changes.length > 3) {
-    comment += `**Recommendation:** Consider breaking into smaller changes\n`;
+    comment += `> **Consider:** Breaking this PR into smaller, focused changes\n`;
   }
+
+  // Footer
+  comment += `\n---\n*AI-generated analysis for review triage*`;
 
   return comment;
 }

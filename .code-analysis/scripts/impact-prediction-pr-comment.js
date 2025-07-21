@@ -35,38 +35,45 @@ module.exports = async ({ github, context }) => {
 function buildComment(results) {
   let comment = `## Impact Prediction\n\n`;
   
-  // Risk score - prominent display
+  // Risk score with visual bar
   const riskLevel = getRiskLevel(results.overall_risk_score);
+  const riskBar = getRiskBar(results.overall_risk_score);
   const riskPercentage = Math.round(results.overall_risk_score * 100);
-  comment += `**Risk Score: ${riskPercentage}%** (${riskLevel}) | ${results.deployment_readiness.split(' - ')[0]}\n\n`;
+  comment += `**Risk Assessment:** ${riskBar} ${riskPercentage}% (${riskLevel})\n`;
+  comment += `**Deployment Status:** ${results.deployment_readiness.split(' - ')[0]}\n\n`;
 
-  // High priority impacts only
+  // High priority impacts in structured format
   const criticalImpacts = results.impacts.filter(impact => 
     impact.severity === 'high' || impact.severity === 'critical'
   );
   
   if (criticalImpacts.length > 0) {
-    comment += `**Key Concerns:**\n`;
+    comment += `### Key Concerns\n`;
+    comment += `| Severity | Category | Issue |\n`;
+    comment += `|----------|----------|-------|\n`;
     criticalImpacts.slice(0, 2).forEach(impact => {
-      comment += `**${impact.category.toUpperCase()}** (${impact.severity.toUpperCase()}) - ${impact.description.split('.')[0]}\n`;
+      comment += `| ${impact.severity.toUpperCase()} | ${impact.category.toUpperCase()} | ${impact.description.split('.')[0]} |\n`;
     });
     comment += `\n`;
   }
 
-  // Critical tests only
+  // Critical tests with priority indicators
   const criticalTests = results.test_recommendations.filter(test => test.priority === 'high');
   if (criticalTests.length > 0) {
-    comment += `**Must Test:** `;
-    const testList = criticalTests.slice(0, 2)
-      .map(test => test.test_type.toUpperCase())
-      .join(', ');
-    comment += testList + `\n\n`;
+    comment += `**Required Testing:**\n`;
+    criticalTests.slice(0, 2).forEach(test => {
+      comment += `- [!] ${test.test_type.toUpperCase()}\n`;
+    });
+    comment += `\n`;
   }
 
-  // Deployment guidance for high risk only
+  // Deployment guidance with visual indicator
   if (results.overall_risk_score > 0.7) {
-    comment += `**High Risk:** Consider staged rollout\n\n`;
+    comment += `> **⚠ High Risk Deployment:** Consider staged rollout strategy\n\n`;
   }
+
+  // Footer
+  comment += `---\n*AI-generated analysis for review triage*`;
 
   return comment;
 }
@@ -75,4 +82,10 @@ function getRiskLevel(riskScore) {
   if (riskScore < 0.3) return 'LOW';
   if (riskScore < 0.7) return 'MEDIUM';
   return 'HIGH';
+}
+
+function getRiskBar(riskScore) {
+  const filled = Math.round(riskScore * 10);
+  const empty = 10 - filled;
+  return '[' + '█'.repeat(filled) + '░'.repeat(empty) + ']';
 }

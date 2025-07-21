@@ -43,9 +43,10 @@ module.exports = async ({ github, context }) => {
 function buildComment(results) {
   let comment = `## Intent Classification\n\n`;
   
-  // Primary intent - concise format
+  // Primary intent with confidence bar
   const confidenceLevel = getConfidenceLevel(results.confidence);
-  comment += `**${results.primary_intent.toUpperCase()}** (${confidenceLevel}: ${Math.round(results.confidence * 100)}%)\n\n`;
+  const confidenceBar = getConfidenceBar(results.confidence);
+  comment += `**${results.primary_intent.toUpperCase()}** | ${confidenceBar} ${Math.round(results.confidence * 100)}% (${confidenceLevel})\n\n`;
   
   // Secondary intents - compact format
   if (results.secondary_intents && results.secondary_intents.length > 0) {
@@ -56,28 +57,32 @@ function buildComment(results) {
     comment += secondaryList + `\n\n`;
   }
   
-  // Key metrics - one line
+  // Key metrics - structured table
   const fileChanges = results.file_changes_summary;
-  comment += `**Scope:** ${fileChanges.total_files} files, +${fileChanges.total_lines_added}/-${fileChanges.total_lines_removed} lines\n\n`;
-  
-  // Areas - compact format
+  comment += `| Metric | Value |\n`;
+  comment += `|--------|-------|\n`;
+  comment += `| Files | ${fileChanges.total_files} modified |\n`;
+  comment += `| Lines | +${fileChanges.total_lines_added}/-${fileChanges.total_lines_removed} |\n`;
   if (results.affected_areas && results.affected_areas.length > 0) {
-    const areas = results.affected_areas.join(', ');
-    comment += `**Areas:** ${areas}\n\n`;
+    comment += `| Areas | ${results.affected_areas.join(', ')} |\n`;
   }
+  comment += `\n`;
 
   // Only show reasoning if it's meaningful and short
   if (shouldShowReasoning(results.reasoning)) {
     const shortReason = results.reasoning.length > 120 
       ? results.reasoning.substring(0, 120) + '...' 
       : results.reasoning;
-    comment += `**Why:** ${shortReason}\n\n`;
+    comment += `**Analysis:** ${shortReason}\n\n`;
   }
 
-  // Low confidence warning
+  // Low confidence warning with visual indicator
   if (results.confidence < 0.6) {
-    comment += `**Note:** Low confidence - add more descriptive PR title/description\n\n`;
+    comment += `> **Note:** Low confidence - consider adding more descriptive PR title/description\n\n`;
   }
+
+  // Footer
+  comment += `---\n*AI-generated analysis for review triage*`;
 
   return comment;
 }
@@ -86,6 +91,12 @@ function getConfidenceLevel(confidence) {
   if (confidence > 0.8) return 'HIGH';
   if (confidence > 0.5) return 'MEDIUM';
   return 'LOW';
+}
+
+function getConfidenceBar(confidence) {
+  const filled = Math.round(confidence * 10);
+  const empty = 10 - filled;
+  return '[' + '█'.repeat(filled) + '░'.repeat(empty) + ']';
 }
 
 function shouldShowReasoning(reasoning) {

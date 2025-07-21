@@ -124,6 +124,9 @@ module.exports = async ({ github, context }) => {
     comment += `- May require multiple review rounds or team discussion\n`;
   }
   
+  // Footer
+  comment += `\n---\n*AI-generated analysis for review triage*`;
+  
   // Create or update the comment
   try {
     await createOrUpdateComment(
