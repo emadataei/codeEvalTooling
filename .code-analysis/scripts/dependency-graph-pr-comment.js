@@ -1,5 +1,6 @@
 const { getPRNumber, loadResults, createOrUpdateComment } = require('./pr-comment-utils');
 const fs = require('fs');
+const path = require('path');
 
 module.exports = async ({ github, context }) => {
   const prNumber = getPRNumber(context);
@@ -14,7 +15,12 @@ module.exports = async ({ github, context }) => {
     total_files_analyzed: 0,
     graph_generated: false,
     circular_dependencies: [],
-    high_impact_changes: []
+    high_impact_changes: [],
+    graph_files: {
+      png: null,
+      html: null,
+      ascii: null
+    }
   });
 
   const comment = buildComment(results);
@@ -24,7 +30,7 @@ module.exports = async ({ github, context }) => {
     context, 
     prNumber, 
     comment, 
-    'Dependency Graph',
+    'Code Dependencies',
     `dependency-graph-${context.payload?.pull_request?.head?.sha || 'unknown'}`
   );
   
@@ -32,70 +38,173 @@ module.exports = async ({ github, context }) => {
 };
 
 function buildComment(results) {
+  const complexityLevel = getDependencyComplexity(results);
+  const riskLevel = getDependencyRisk(results);
+  
   let comment = `## Dependency Analysis\n\n`;
   
-  // Overview metrics
-  comment += `**Analysis Summary:** ${results.total_files_analyzed} files | ${results.changes.length} changes\n\n`;
+  // Header with complexity and risk levels
+  comment += `**Complexity:** ${complexityLevel} | **Risk:** ${riskLevel}\n`;
+  comment += `**Scope:** ${results.total_files_analyzed} files, ${results.changes.length} changes\n\n`;
 
-  // High-impact changes in structured table
-  if (results.high_impact_changes && results.high_impact_changes.length > 0) {
-    comment += `### High Impact Changes\n`;
-    comment += `| Type | File | Dependencies Affected |\n`;
-    comment += `|------|------|-----------------------|\n`;
-    results.high_impact_changes.slice(0, 3).forEach(change => {
-      const changeType = getChangeType(change.change_type);
-      comment += `| ${changeType} | \`${change.file_name}\` | ${change.impact_score} |\n`;
-    });
-    comment += `\n`;
+  // Visual graph section
+  const graphSection = buildGraphSection(results);
+  if (graphSection) {
+    comment += graphSection;
   }
 
-  // Circular dependencies with clear warning
+  // Critical issues first
   if (results.circular_dependencies && results.circular_dependencies.length > 0) {
-    comment += `### ⚠ Circular Dependencies Detected\n`;
+    comment += `### CIRCULAR DEPENDENCIES DETECTED\n`;
+    comment += `**Count:** ${results.circular_dependencies.length}\n\n`;
     comment += `\`\`\`\n`;
     results.circular_dependencies.slice(0, 2).forEach(cycle => {
       comment += `${cycle.join(' → ')}\n`;
     });
+    if (results.circular_dependencies.length > 2) {
+      comment += `... and ${results.circular_dependencies.length - 2} more\n`;
+    }
     comment += `\`\`\`\n\n`;
   }
 
-  // Change summary - organized by type
+  // High-impact changes
+  if (results.high_impact_changes && results.high_impact_changes.length > 0) {
+    comment += `### High Impact Changes\n`;
+    comment += `| File | Type | Impact | Dependencies |\n`;
+    comment += `|------|------|--------|---------------|\n`;
+    results.high_impact_changes.slice(0, 3).forEach(change => {
+      const changeType = getChangeTypeLabel(change.change_type);
+      const impactLevel = getImpactLevel(change.impact_score);
+      comment += `| \`${change.file_name}\` | ${changeType} | ${impactLevel} | ${change.impact_score} |\n`;
+    });
+    if (results.high_impact_changes.length > 3) {
+      comment += `| ... | ... | ... | ${results.high_impact_changes.length - 3} more |\n`;
+    }
+    comment += `\n`;
+  }
+
+  // Change breakdown by category
   const changesByType = groupChangesByType(results.changes);
   if (Object.keys(changesByType).length > 0) {
-    comment += `**Change Breakdown:**\n`;
+    comment += `**Change Categories:**\n`;
     Object.entries(changesByType).forEach(([type, changes]) => {
-      comment += `- ${getChangeType(type)}: ${changes.length}\n`;
+      comment += `- ${getChangeTypeLabel(type)}: ${changes.length}\n`;
     });
     comment += `\n`;
   }
 
-  // Interactive graph reference
-  if (fs.existsSync('dependency_graph.html')) {
-    comment += `📊 **[View Interactive Dependency Graph](./dependency_graph.html)**\n\n`;
-  }
-
-  // Recommendations with action items
-  if (results.circular_dependencies && results.circular_dependencies.length > 0) {
-    comment += `> **Action Required:** Resolve circular dependencies before merge\n`;
-  }
-  if (results.high_impact_changes && results.high_impact_changes.length > 3) {
-    comment += `> **Consider:** Breaking this PR into smaller, focused changes\n`;
+  // Recommendations
+  const recommendations = getRecommendations(results);
+  if (recommendations.length > 0) {
+    comment += `**Recommendations:**\n`;
+    recommendations.forEach(rec => {
+      comment += `- ${rec}\n`;
+    });
+    comment += `\n`;
   }
 
   // Footer
-  comment += `\n---\n*AI-generated analysis for review triage*`;
+  comment += `---\n*Dependency analysis • Auto-updated*`;
 
   return comment;
 }
 
-function getChangeType(changeType) {
-  const types = {
+function getDependencyComplexity(results) {
+  const changeCount = results.changes.length;
+  const highImpactCount = results.high_impact_changes?.length || 0;
+  
+  if (changeCount > 15 || highImpactCount > 5) return 'VERY HIGH';
+  if (changeCount > 10 || highImpactCount > 3) return 'HIGH';
+  if (changeCount > 5 || highImpactCount > 1) return 'MEDIUM';
+  if (changeCount > 2) return 'LOW';
+  return 'VERY LOW';
+}
+
+function getDependencyRisk(results) {
+  const circularDeps = results.circular_dependencies?.length || 0;
+  const highImpactCount = results.high_impact_changes?.length || 0;
+  
+  if (circularDeps > 0) return 'CRITICAL';
+  if (highImpactCount > 3) return 'HIGH';
+  if (highImpactCount > 1) return 'MEDIUM';
+  if (highImpactCount > 0) return 'LOW';
+  return 'NONE';
+}
+
+function buildGraphSection(results) {
+  let section = '';
+  
+  if (results.graph_files) {
+    section += `### Dependency Graph\n`;
+    
+    // PNG image reference
+    if (results.graph_files.png && fs.existsSync(results.graph_files.png)) {
+      section += `![Dependency Graph](${results.graph_files.png})\n\n`;
+    }
+    
+    // Interactive HTML link
+    if (results.graph_files.html && fs.existsSync(results.graph_files.html)) {
+      section += `[View Interactive Graph](${results.graph_files.html}) | `;
+    }
+    
+    // ASCII fallback link
+    if (results.graph_files.ascii && fs.existsSync(results.graph_files.ascii)) {
+      section += `[Text Version](${results.graph_files.ascii})\n\n`;
+    } else {
+      section += `\n`;
+    }
+  }
+  
+  return section;
+}
+
+function getImpactLevel(score) {
+  if (typeof score === 'number') {
+    if (score >= 8) return 'CRITICAL';
+    if (score >= 6) return 'HIGH';
+    if (score >= 4) return 'MEDIUM';
+    if (score >= 2) return 'LOW';
+    return 'MINIMAL';
+  }
+  return 'UNKNOWN';
+}
+
+function getChangeTypeLabel(changeType) {
+  const labels = {
     'added': 'ADDED',
-    'modified': 'MODIFIED',
+    'modified': 'MODIFIED', 
     'deleted': 'DELETED',
-    'renamed': 'RENAMED'
+    'renamed': 'RENAMED',
+    'moved': 'MOVED'
   };
-  return types[changeType] || 'CHANGED';
+  return labels[changeType] || 'CHANGED';
+}
+
+function getRecommendations(results) {
+  const recommendations = [];
+  
+  if (results.circular_dependencies?.length > 0) {
+    recommendations.push('Resolve circular dependencies before merging');
+  }
+  
+  if (results.high_impact_changes?.length > 3) {
+    recommendations.push('Consider splitting into smaller PRs for easier review');
+  }
+  
+  if (results.changes.length > 20) {
+    recommendations.push('Large change set - ensure comprehensive testing');
+  }
+  
+  const deletedFiles = results.changes.filter(c => c.change_type === 'deleted').length;
+  if (deletedFiles > 5) {
+    recommendations.push('Verify all deleted file dependencies are properly handled');
+  }
+  
+  return recommendations;
+}
+
+function getChangeType(changeType) {
+  return getChangeTypeLabel(changeType);
 }
 
 function groupChangesByType(changes) {

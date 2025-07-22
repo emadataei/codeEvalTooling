@@ -506,8 +506,37 @@ def main():
                 'impact_score': change.impact_score
             }
             for change in changes if change.impact_score > 2
-        ]
+        ],
+        'graph_files': {
+            'png': None,
+            'html': None,
+            'ascii': None
+        }
     }
+    
+    # Generate visual dependency graphs using the visualizer
+    try:
+        from dependency_graph_visualizer import generate_dependency_graph_image, generate_interactive_graph
+        
+        # Convert our graph to simple dependency format
+        simple_deps = {}
+        for file_path, node in generator.after_graph.items():
+            simple_deps[file_path] = list(node.dependencies)
+        
+        # Generate PNG image
+        png_file = generate_dependency_graph_image(simple_deps, '.')
+        if png_file:
+            pr_result['graph_files']['png'] = png_file
+            pr_result['graph_generated'] = True
+        
+        # Generate interactive HTML
+        html_file = generate_interactive_graph(simple_deps, '.')
+        if html_file:
+            pr_result['graph_files']['html'] = html_file
+            pr_result['graph_generated'] = True
+            
+    except ImportError:
+        print("Visual graph generator not available, using basic output")
     
     if args.output_dot:
         generator.generate_graphviz_dot(args.output_dot)
@@ -515,6 +544,7 @@ def main():
     
     if args.output_html:
         generator.generate_html_visualization(args.output_html)
+        pr_result['graph_files']['html'] = args.output_html
         pr_result['graph_generated'] = True
         print(f"Generated HTML visualization: {args.output_html}")
     
