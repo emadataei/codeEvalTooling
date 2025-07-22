@@ -1,4 +1,5 @@
 const { getPRNumber, loadResults, createOrUpdateComment } = require('./pr-comment-utils');
+const { generateDependencyDiff, getChangedFiles } = require('./dependency-diff');
 const fs = require('fs');
 const path = require('path');
 
@@ -10,6 +11,11 @@ module.exports = async ({ github, context }) => {
     return;
   }
 
+  // Generate live dependency diff from changed files
+  const changedFiles = getChangedFiles();
+  const dependencyDiff = await generateDependencyDiff(changedFiles);
+
+  // Load existing results for backward compatibility
   const results = loadResults('dependency-graph-results.json', { 
     changes: [],
     total_files_analyzed: 0,
@@ -22,6 +28,14 @@ module.exports = async ({ github, context }) => {
       ascii: null
     }
   });
+
+  // Enhance results with live dependency diff
+  if (dependencyDiff) {
+    results.dependency_diff = dependencyDiff;
+    results.total_files_analyzed = dependencyDiff.stats.totalFiles;
+    results.circular_dependencies = dependencyDiff.stats.circularDependencies || [];
+    results.graph_generated = true;
+  }
 
   const comment = buildComment(results);
   
@@ -134,28 +148,61 @@ function getDependencyRisk(results) {
 function buildGraphSection(results) {
   let section = '';
   
-  if (results.graph_files) {
-    section += `### Dependency Graph\n`;
-    
-    // For now, indicate that graphs are generated but link to artifacts
-    const hasGraphs = results.graph_files.png || results.graph_files.html || results.graph_files.ascii;
-    
-    if (hasGraphs) {
-      section += `Visual dependency graphs have been generated and are available in the workflow artifacts.\n\n`;
-      
-      if (results.graph_files.png) {
-        section += `- **Static Graph**: \`${results.graph_files.png}\`\n`;
-      }
-      if (results.graph_files.html) {
-        section += `- **Interactive Graph**: \`${results.graph_files.html}\`\n`;
-      }
-      if (results.graph_files.ascii) {
-        section += `- **Text Version**: \`${results.graph_files.ascii}\`\n`;
-      }
-      section += `\n**Download artifacts** from the GitHub Actions workflow to view the graphs.\n\n`;
-    }
+  // Show live dependency diff first if available
+  if (results.dependency_diff?.diagram) {
+    section += buildLiveDependencySection(results.dependency_diff);
+    return section;
   }
   
+  // Fallback to existing graph files approach
+  return buildStaticGraphSection(results.graph_files);
+}
+
+function buildLiveDependencySection(dependencyDiff) {
+  let section = `### Dependency Graph (PR Changes)\n\n`;
+  section += dependencyDiff.diagram;
+  section += `\n`;
+  
+  // Add stats
+  const stats = dependencyDiff.stats;
+  section += `**Graph Stats:** ${stats.totalFiles} files analyzed, `;
+  section += `${stats.totalDependencies} dependencies mapped`;
+  
+  if (stats.circularDependencies.length > 0) {
+    section += `, 🔴 ${stats.circularDependencies.length} circular dependencies detected`;
+  }
+  
+  if (stats.maxDepth > 0) {
+    section += `, max depth: ${stats.maxDepth}`;
+  }
+  
+  section += `\n\n`;
+  section += `**Legend:** 🟢 Changed files, 🔴 Circular dependencies\n\n`;
+  
+  return section;
+}
+
+function buildStaticGraphSection(graphFiles) {
+  if (!graphFiles) return '';
+  
+  let section = `### Dependency Graph\n`;
+  const hasGraphs = graphFiles.png || graphFiles.html || graphFiles.ascii;
+  
+  if (!hasGraphs) return '';
+  
+  section += `Visual dependency graphs have been generated and are available in the workflow artifacts.\n\n`;
+  
+  if (graphFiles.png) {
+    section += `- **Static Graph**: \`${graphFiles.png}\`\n`;
+  }
+  if (graphFiles.html) {
+    section += `- **Interactive Graph**: \`${graphFiles.html}\`\n`;
+  }
+  if (graphFiles.ascii) {
+    section += `- **Text Version**: \`${graphFiles.ascii}\`\n`;
+  }
+  
+  section += `\n**Download artifacts** from the GitHub Actions workflow to view the graphs.\n\n`;
   return section;
 }
 

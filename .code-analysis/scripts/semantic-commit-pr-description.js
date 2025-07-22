@@ -60,8 +60,23 @@ function buildSemanticCommitSection(results) {
  */
 async function updatePRDescription(github, context, prNumber, semanticSection) {
   try {
-    // Replace the entire PR description with the Change Story
-    const newBody = semanticSection;
+    // Get current PR description
+    const { data: pr } = await github.rest.pulls.get({
+      owner: context.repo.owner,
+      repo: context.repo.repo,
+      pull_number: prNumber
+    });
+    
+    let body = pr.body || '';
+    
+    // Remove existing Change Story section if present
+    body = body.replace(/## Change Story[\s\S]*?(?=##|$)/g, '').trim();
+    
+    // Add semantic section at the beginning
+    let newBody = semanticSection;
+    if (body) {
+      newBody += '\n\n' + body;
+    }
     
     // Update PR description
     await github.rest.pulls.update({
@@ -71,7 +86,7 @@ async function updatePRDescription(github, context, prNumber, semanticSection) {
       body: newBody
     });
     
-    console.log('Successfully replaced PR description with semantic commit story');
+    console.log('Successfully updated PR description with semantic commit story');
     
   } catch (error) {
     console.error('Error updating PR description:', error);
