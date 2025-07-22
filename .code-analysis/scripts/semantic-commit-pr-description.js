@@ -82,7 +82,7 @@ async function updatePRDescription(github, context, prNumber, semanticSection) {
       prNumber,
       semanticSection,
       'Change Story',
-      'SEMANTIC_COMMIT_STORY'
+      `semantic-commit-${context.payload?.pull_request?.head?.sha || 'unknown'}`
     );
   }
 }

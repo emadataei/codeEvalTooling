@@ -69,18 +69,14 @@ module.exports = async ({ github, context }) => {
     comment += `- **AI Analysis:** Enhanced review using project-specific patterns\n\n`;
   }
   
-  // Next steps guidance
+  // Next steps guidance (simplified)
   if (passed) {
-    comment += `### Next Steps\n\n`;
-    comment += `**Status:** Quality gate passed. This PR is ready for cognitive complexity analysis.\n\n`;
+    comment += `### Status\n\n`;
+    comment += `Quality gate passed. This PR is ready for cognitive complexity analysis.\n\n`;
     comment += `**For Reviewers:** Focus on business logic, architecture, and domain-specific concerns.\n`;
   } else {
-    comment += `### Required Actions\n\n`;
-    comment += `**Status:** Quality gate failed. Please resolve critical issues above before requesting review.\n\n`;
-    comment += `**For Developers:** \n`;
-    comment += `1. Fix all critical issues listed above\n`;
-    comment += `2. Run quality checks locally before pushing\n`;
-    comment += `3. Consider the recommended improvements for better code quality\n\n`;
+    comment += `### Status\n\n`;
+    comment += `Quality gate failed. Critical issues detected above.\n\n`;
     comment += `**Note:** Cognitive analysis will still run to provide complexity insights.\n`;
   }
   
@@ -92,7 +88,7 @@ module.exports = async ({ github, context }) => {
       prNumber, 
       comment, 
       'Code Quality Gate',  // identifier to find existing comments (matches comment header)
-      'QUALITY_GATE_COMMENT'  // unique comment ID for reliable matching
+      `quality-gate-${context.payload?.pull_request?.head?.sha || 'unknown'}`  // unique comment ID for reliable matching
     );
   } catch (error) {
     console.error('Error creating or updating quality gate comment:', error);

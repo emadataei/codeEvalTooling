@@ -58,13 +58,7 @@ function buildComment(results) {
     comment += astSection;
   }
 
-  // Complex files requiring attention
-  const complexFilesSection = buildComplexFilesSection(results);
-  if (complexFilesSection) {
-    comment += complexFilesSection;
-  }
-
-  // Review guidelines
+  // Review guidelines (removed complex files section)
   const reviewSection = buildReviewSection(results.tier);
   comment += reviewSection;
 
@@ -139,24 +133,6 @@ function buildASTSection(results) {
   section += `| Total Functions | ${summary.total_functions} | ${getImpactLevel(summary.total_functions, [5, 15])} |\n`;
   section += `| Control Structures | ${summary.total_control_structures} | ${getImpactLevel(summary.total_control_structures, [15, 30])} |\n`;
   section += `\n`;
-  
-  return section;
-}
-
-function buildComplexFilesSection(results) {
-  const complexFiles = results.ast_metrics?.summary?.complex_files;
-  if (!complexFiles?.length) return '';
-  
-  let section = `### Files Requiring Review Focus\n`;
-  complexFiles.slice(0, 3).forEach(file => {
-    section += `**${file.path}** (Complexity: ${file.score})\n`;
-    const issues = file.main_issues.slice(0, 2).map(issue => `- ${issue}`).join('\n');
-    section += `${issues}\n\n`;
-  });
-  
-  if (complexFiles.length > 3) {
-    section += `*... and ${complexFiles.length - 3} more files*\n\n`;
-  }
   
   return section;
 }
