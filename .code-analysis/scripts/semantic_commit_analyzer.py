@@ -185,53 +185,9 @@ class SemanticCommitAnalyzer:
 
     def create_visual_summary(self, story: ChangeStory) -> str:
         """Generate a visual representation of the change story using actual images."""
-        try:
-            from visual_generator import (
-                create_impact_heatmap, 
-                create_development_flow_chart,
-                categorize_intents
-            )
-            
-            visual = []
-            
-            # Generate enhanced development flow chart
-            if story.commits_by_intent:
-                enhanced_categories = categorize_intents(story.commits_by_intent)
-                flow_chart_path = create_development_flow_chart(story.commits_by_intent)
-                
-                if flow_chart_path:
-                    visual.append("## Development Flow")
-                    visual.append(f"![Development Flow]({flow_chart_path})")
-                    visual.append("")
-                    
-                    # Add textual summary
-                    flow_summary = " → ".join([f"{cat}({count})" for cat, count in enhanced_categories.items()])
-                    visual.append(f"**Summary:** {flow_summary}")
-                    visual.append("")
-            
-            # Generate impact heatmap
-            if story.impact_areas:
-                heatmap_path = create_impact_heatmap(story.impact_areas)
-                
-                if heatmap_path:
-                    visual.append("## Impact Areas Heatmap")
-                    visual.append(f"![Impact Heatmap]({heatmap_path})")
-                    visual.append("")
-                    
-                    # Add top impact areas as text
-                    top_areas = sorted(story.impact_areas.items(), key=lambda x: x[1], reverse=True)[:3]
-                    impact_summary = " | ".join([f"{area}: {count}" for area, count in top_areas])
-                    visual.append(f"**Primary Impact:** {impact_summary}")
-                    visual.append("")
-            
-            return "\n".join(visual) if visual else self._create_fallback_visual(story)
-            
-        except ImportError:
-            print("Visual generator not available, using fallback ASCII visualization")
-            return self._create_fallback_visual(story)
-        except Exception as e:
-            print(f"Error generating visual summary: {e}")
-            return self._create_fallback_visual(story)
+        # Skip visual summary generation to avoid duplicates
+        # Mermaid visualizations are now handled in JavaScript layer
+        return ""
     
     def _create_fallback_visual(self, story: ChangeStory) -> str:
         """Create fallback ASCII visualization when image generation fails."""
@@ -305,8 +261,6 @@ class SemanticCommitAnalyzer:
         visual.append("")
         
         return visual
-        
-        return "\n".join(visual)
 
     async def generate_narrative_summary(self, commits: List[CommitInfo]) -> Tuple[str, str]:
         """Generate AI-powered what/why summary."""

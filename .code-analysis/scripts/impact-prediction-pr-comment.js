@@ -25,8 +25,8 @@ module.exports = async ({ github, context }) => {
     context, 
     prNumber, 
     comment, 
-    'Risk Assessment',
-    `impact-prediction-${context.payload?.pull_request?.head?.sha || 'unknown'}`
+    'Impact Assessment',
+    `impact-prediction-pr-${prNumber}`
   );
   
   console.log('Impact prediction comment posted/updated successfully');

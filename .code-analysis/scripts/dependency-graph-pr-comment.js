@@ -45,7 +45,7 @@ module.exports = async ({ github, context }) => {
     prNumber, 
     comment, 
     'Dependency Analysis',
-    `dependency-graph-${context.payload?.pull_request?.head?.sha || 'unknown'}`
+    `dependency-graph-pr-${prNumber}`
   );
   
   console.log('Dependency graph comment posted/updated successfully');

@@ -34,7 +34,7 @@ module.exports = async ({ github, context }) => {
     prNumber, 
     comment, 
     'Change Intent',
-    `intent-classification-${context.payload?.pull_request?.head?.sha || 'unknown'}`
+    `intent-classification-pr-${prNumber}`
   );
   
   console.log('Intent classification comment posted/updated successfully');

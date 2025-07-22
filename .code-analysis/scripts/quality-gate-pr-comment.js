@@ -88,7 +88,7 @@ module.exports = async ({ github, context }) => {
       prNumber, 
       comment, 
       'Code Quality Gate',  // identifier to find existing comments (matches comment header)
-      `quality-gate-${context.payload?.pull_request?.head?.sha || 'unknown'}`  // unique comment ID for reliable matching
+      `quality-gate-pr-${prNumber}`  // unique comment ID for reliable matching
     );
   } catch (error) {
     console.error('Error creating or updating quality gate comment:', error);
