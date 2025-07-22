@@ -59,31 +59,6 @@ module.exports = async ({ github, context }) => {
     });
   }
   
-  // Warning issues with helpful context
-  if (results.issues && results.issues.warning && results.issues.warning.length > 0) {
-    comment += `### Quality Improvements (Recommended)\n\n`;
-    comment += `These issues don't block the merge but should be addressed for better code quality:\n\n`;
-    
-    const warningsToShow = Math.min(results.issues.warning.length, 8);
-    results.issues.warning.slice(0, warningsToShow).forEach((issue, index) => {
-      comment += `**${index + 1}. ${issue.category}**\n`;
-      comment += `- ${issue.message}`;
-      if (issue.file !== 'PR' && issue.file !== 'general') {
-        comment += ` (in \`${issue.file}\`)`;
-      }
-      comment += `\n`;
-      if (issue.suggestion) {
-        comment += `- **Suggested Fix:** ${issue.suggestion}\n`;
-      }
-      comment += `\n`;
-    });
-    
-    if (results.issues.warning.length > warningsToShow) {
-      const remaining = results.issues.warning.length - warningsToShow;
-      comment += `*...and ${remaining} additional improvement${remaining > 1 ? 's' : ''} available in detailed analysis.*\n\n`;
-    }
-  }
-  
   // Add project standards context if available
   if (results.standards_applied) {
     comment += `### Standards Applied\n\n`;
@@ -98,9 +73,6 @@ module.exports = async ({ github, context }) => {
   if (passed) {
     comment += `### Next Steps\n\n`;
     comment += `**Status:** Quality gate passed. This PR is ready for cognitive complexity analysis.\n\n`;
-    if (results.issues && results.issues.warning && results.issues.warning.length > 0) {
-      comment += `**Recommendation:** Consider addressing the quality improvements above before final merge.\n\n`;
-    }
     comment += `**For Reviewers:** Focus on business logic, architecture, and domain-specific concerns.\n`;
   } else {
     comment += `### Required Actions\n\n`;

@@ -31,7 +31,7 @@ module.exports = async ({ github, context }) => {
     prNumber, 
     comment, 
     'Code Dependencies',
-    `dependency-graph-${context.payload?.pull_request?.head?.sha || 'unknown'}`
+    'DEPENDENCY_GRAPH_ANALYSIS'
   );
   
   console.log('Dependency graph comment posted/updated successfully');
@@ -137,21 +137,22 @@ function buildGraphSection(results) {
   if (results.graph_files) {
     section += `### Dependency Graph\n`;
     
-    // PNG image reference
-    if (results.graph_files.png && fs.existsSync(results.graph_files.png)) {
-      section += `![Dependency Graph](${results.graph_files.png})\n\n`;
-    }
+    // For now, indicate that graphs are generated but link to artifacts
+    const hasGraphs = results.graph_files.png || results.graph_files.html || results.graph_files.ascii;
     
-    // Interactive HTML link
-    if (results.graph_files.html && fs.existsSync(results.graph_files.html)) {
-      section += `[View Interactive Graph](${results.graph_files.html}) | `;
-    }
-    
-    // ASCII fallback link
-    if (results.graph_files.ascii && fs.existsSync(results.graph_files.ascii)) {
-      section += `[Text Version](${results.graph_files.ascii})\n\n`;
-    } else {
-      section += `\n`;
+    if (hasGraphs) {
+      section += `Visual dependency graphs have been generated and are available in the workflow artifacts.\n\n`;
+      
+      if (results.graph_files.png) {
+        section += `- **Static Graph**: \`${results.graph_files.png}\`\n`;
+      }
+      if (results.graph_files.html) {
+        section += `- **Interactive Graph**: \`${results.graph_files.html}\`\n`;
+      }
+      if (results.graph_files.ascii) {
+        section += `- **Text Version**: \`${results.graph_files.ascii}\`\n`;
+      }
+      section += `\n**Download artifacts** from the GitHub Actions workflow to view the graphs.\n\n`;
     }
   }
   

@@ -41,7 +41,6 @@ module.exports = async ({ github, context }) => {
 };
 
 function buildComment(results) {
-  const startTime = Date.now();
   const confidenceLevel = getConfidenceLevel(results.confidence);
   const intentLabel = getIntentLabel(results.primary_intent);
   
@@ -56,7 +55,7 @@ function buildComment(results) {
     secondaryIntents = significant ? ` + ${significant}` : '';
   }
   
-  let comment = `## 🎯 Change Intent | ${intentLabel}${secondaryIntents} | Confidence: ${confidenceLevel}\n\n`;
+  let comment = `## Change Intent | ${intentLabel}${secondaryIntents} | Confidence: ${confidenceLevel}\n\n`;
   
   // Quick summary
   const intentDescription = getIntentDescription(results.primary_intent, results.confidence);
@@ -80,9 +79,8 @@ function buildComment(results) {
     comment += `- Clarify the main purpose of this change\n\n`;
   }
   
-  // Processing info
-  const processingTime = ((Date.now() - startTime) / 1000).toFixed(1);
-  comment += `---\n*AI analysis • ${confidenceLevel} confidence • ${processingTime}s*`;
+  // Footer
+  comment += `---\n*Change intent analysis • ${confidenceLevel} confidence*`;
 
   return comment;
 }

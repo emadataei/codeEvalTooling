@@ -184,39 +184,127 @@ class SemanticCommitAnalyzer:
         return dict(impact)
 
     def create_visual_summary(self, story: ChangeStory) -> str:
-        """Generate a visual representation of the change story."""
+        """Generate a visual representation of the change story using actual images."""
+        try:
+            from visual_generator import (
+                create_impact_heatmap, 
+                create_development_flow_chart,
+                categorize_intents
+            )
+            
+            visual = []
+            
+            # Generate enhanced development flow chart
+            if story.commits_by_intent:
+                enhanced_categories = categorize_intents(story.commits_by_intent)
+                flow_chart_path = create_development_flow_chart(story.commits_by_intent)
+                
+                if flow_chart_path:
+                    visual.append("## Development Flow")
+                    visual.append(f"![Development Flow]({flow_chart_path})")
+                    visual.append("")
+                    
+                    # Add textual summary
+                    flow_summary = " → ".join([f"{cat}({count})" for cat, count in enhanced_categories.items()])
+                    visual.append(f"**Summary:** {flow_summary}")
+                    visual.append("")
+            
+            # Generate impact heatmap
+            if story.impact_areas:
+                heatmap_path = create_impact_heatmap(story.impact_areas)
+                
+                if heatmap_path:
+                    visual.append("## Impact Areas Heatmap")
+                    visual.append(f"![Impact Heatmap]({heatmap_path})")
+                    visual.append("")
+                    
+                    # Add top impact areas as text
+                    top_areas = sorted(story.impact_areas.items(), key=lambda x: x[1], reverse=True)[:3]
+                    impact_summary = " | ".join([f"{area}: {count}" for area, count in top_areas])
+                    visual.append(f"**Primary Impact:** {impact_summary}")
+                    visual.append("")
+            
+            return "\n".join(visual) if visual else self._create_fallback_visual(story)
+            
+        except ImportError:
+            print("Visual generator not available, using fallback ASCII visualization")
+            return self._create_fallback_visual(story)
+        except Exception as e:
+            print(f"Error generating visual summary: {e}")
+            return self._create_fallback_visual(story)
+    
+    def _create_fallback_visual(self, story: ChangeStory) -> str:
+        """Create fallback ASCII visualization when image generation fails."""
         visual = []
         
-        # Story arc visualization
-        visual.append("## Change Story Arc")
-        visual.append("```")
-        
-        intents = list(story.commits_by_intent.keys())
-        if intents:
-            # Create a flow diagram
-            flow_parts = []
-            for intent in intents:
-                count = len(story.commits_by_intent[intent])
-                flow_parts.append(f"{intent.title()}({count})")
+        # Enhanced development flow with better categorization
+        if story.commits_by_intent:
+            enhanced_categories = self._categorize_intents_fallback(story.commits_by_intent)
             
+            visual.append("## Development Flow")
+            flow_parts = []
+            for category, count in enhanced_categories.items():
+                flow_parts.append(f"{category}({count})")
             visual.append("  " + " → ".join(flow_parts))
+            visual.append("")
         
+        # Simplified impact visualization
+        if story.impact_areas:
+            impact_section = self._create_impact_section(story.impact_areas)
+            visual.extend(impact_section)
+        
+        return "\n".join(visual)
+    
+    def _categorize_intents_fallback(self, commits_by_intent):
+        """Categorize intents for fallback visualization."""
+        enhanced_categories = {}
+        
+        category_mapping = {
+            'feature_dev': ['feature', 'feat', 'add', 'implement'],
+            'bug_fixes': ['fix', 'bug', 'hotfix', 'patch'],
+            'testing': ['test', 'spec', 'coverage'],
+            'infrastructure': ['infra', 'deploy', 'config', 'setup', 'workflow', 'ci', 'cd'],
+            'documentation': ['docs', 'doc', 'readme', 'comment']
+        }
+        
+        category_names = {
+            'feature_dev': 'Feature Dev',
+            'bug_fixes': 'Bug Fixes', 
+            'testing': 'Testing',
+            'infrastructure': 'Infrastructure',
+            'documentation': 'Documentation'
+        }
+        
+        for intent, commits in commits_by_intent.items():
+            categorized = False
+            for category_key, keywords in category_mapping.items():
+                if intent.lower() in keywords:
+                    category_name = category_names[category_key]
+                    enhanced_categories[category_name] = enhanced_categories.get(category_name, 0) + len(commits)
+                    categorized = True
+                    break
+            
+            if not categorized:
+                enhanced_categories['Code Quality'] = enhanced_categories.get('Code Quality', 0) + len(commits)
+        
+        return enhanced_categories
+    
+    def _create_impact_section(self, impact_areas):
+        """Create impact visualization section."""
+        visual = []
+        visual.append("## Impact Distribution")
+        visual.append("```")
+        max_impact = max(impact_areas.values()) if impact_areas else 1
+        
+        for area, count in sorted(impact_areas.items(), key=lambda x: x[1], reverse=True):
+            if count > 0:
+                bar_length = int((count / max_impact) * 15)
+                bar = "█" * bar_length + "░" * (15 - bar_length)
+                visual.append(f"{area.ljust(15)} {bar} {count}")
         visual.append("```")
         visual.append("")
         
-        # Impact radar (simple text version)
-        if story.impact_areas:
-            visual.append("## Impact Areas")
-            visual.append("```")
-            max_impact = max(story.impact_areas.values()) if story.impact_areas else 1
-            
-            for area, count in sorted(story.impact_areas.items(), key=lambda x: x[1], reverse=True):
-                if count > 0:
-                    bar_length = int((count / max_impact) * 20)
-                    bar = "█" * bar_length + "░" * (20 - bar_length)
-                    visual.append(f"{area.ljust(12)} {bar} {count}")
-            visual.append("```")
-            visual.append("")
+        return visual
         
         return "\n".join(visual)
 

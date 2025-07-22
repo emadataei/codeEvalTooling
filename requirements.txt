@@ -16,5 +16,10 @@ ast-decompiler
 # For dependency graph visualization (optional - requires Graphviz installation)
 # graphviz
 
+# Visual chart generation dependencies
+matplotlib>=3.5.0
+seaborn>=0.11.0
+Pillow>=8.0.0
+
 # For enhanced regex patterns in TypeScript/JavaScript analysis
 regex

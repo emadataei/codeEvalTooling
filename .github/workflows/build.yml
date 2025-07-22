@@ -30,6 +30,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          # Install system dependencies for visual graph generation
+          sudo apt-get update
+          sudo apt-get install -y graphviz
       
       - name: Get changed files
         id: changed-files
@@ -106,3 +109,16 @@ jobs:
           name: quality-gate-results
           path: quality-gate-results.json
         if: always()
+      
+      - name: Upload Visual Analysis Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-analysis-graphs
+          path: |
+            dependency_graph.png
+            dependency_graph.html
+            dependency_graph.txt
+            impact_heatmap.png
+            development_flow.png
+            story_arc.gif
+        if: always() && github.event_name == 'pull_request'
