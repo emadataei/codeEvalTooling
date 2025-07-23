@@ -54,11 +54,13 @@ jobs:
       - name: Auto-detect project structure
         id: detect-structure
         run: python .code-analysis/scripts/detect_project_structure.py
+        continue-on-error: true
         env:
           GITHUB_OUTPUT: ${{ runner.temp }}/github_output
 
       - name: Install project dependencies
         run: python .code-analysis/scripts/install_project_dependencies.py
+        continue-on-error: true
         env:
           PROJECT_DIR: ${{ steps.detect-structure.outputs.project_dir }}
           HAS_PACKAGE_JSON: ${{ steps.detect-structure.outputs.has_package_json }}
@@ -86,6 +88,7 @@ jobs:
 
       - name: Generate dependency graphs
         run: python .code-analysis/scripts/generate_dependency_graphs.py
+        continue-on-error: true
         env:
           GITHUB_BASE_REF: ${{ github.base_ref }}
           GITHUB_HEAD_REF: ${{ github.head_ref }}
@@ -95,9 +98,11 @@ jobs:
 
       - name: Generate change heatmap
         run: python .code-analysis/scripts/generate_change_heatmap.py
+        continue-on-error: true
 
       - name: Generate animated summary
         run: python .code-analysis/scripts/generate_animated_summary.py
+        continue-on-error: true
         env:
           PROJECT_DIR: ${{ steps.detect-structure.outputs.project_dir }}
           SOURCE_DIRS: ${{ steps.detect-structure.outputs.source_dirs }}
@@ -105,6 +110,7 @@ jobs:
 
       - name: Generate comprehensive report
         run: python .code-analysis/scripts/generate_comprehensive_report.py
+        continue-on-error: true
         env:
           PROJECT_DIR: ${{ steps.detect-structure.outputs.project_dir }}
           SOURCE_DIRS: ${{ steps.detect-structure.outputs.source_dirs }}
@@ -125,6 +131,7 @@ jobs:
           retention-days: 30
 
       - name: Comment PR with enhanced visuals
+        if: always() && github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -144,7 +151,7 @@ jobs:
               reportContent = fs.readFileSync('.code-analysis/outputs/comprehensive_pr_report.md', 'utf8');
             } catch (error) {
               console.log('Could not read comprehensive report:', error.message);
-              reportContent = '## 🎬 Enhanced PR Visuals\n\nAnalysis completed but report not found.';
+              reportContent = '## 🎬 Enhanced PR Visuals\n\nAnalysis completed but report not found. Some visual generation steps may have failed.';
             }
             
             await createOrUpdateComment(

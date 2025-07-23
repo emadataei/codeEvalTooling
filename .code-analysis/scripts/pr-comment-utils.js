@@ -47,6 +47,8 @@ function loadResults(filePath, defaultResults = {}) {
  */
 async function createOrUpdateComment(github, context, prNumber, commentBody, identifier, commentId = null) {
   try {
+    console.log(`Creating/updating comment with identifier: "${identifier}"`);
+    
     // Get all comments on the PR
     const { data: comments } = await github.rest.issues.listComments({
       owner: context.repo.owner,
@@ -54,19 +56,29 @@ async function createOrUpdateComment(github, context, prNumber, commentBody, ide
       issue_number: prNumber,
     });
 
+    console.log(`Found ${comments.length} existing comments`);
+
     // Find existing comment by comment ID first (more reliable), then by identifier
     let existingComment = null;
     if (commentId) {
       existingComment = comments.find(comment => 
         comment.body.includes(`<!-- comment-id: ${commentId} -->`)
       );
+      if (existingComment) {
+        console.log(`Found existing comment by comment ID: ${commentId}`);
+      }
     }
     
     // Fallback to identifier matching if no comment ID match found
     if (!existingComment) {
       existingComment = comments.find(comment => 
-        comment.body.includes(identifier)
+        comment.body.includes(identifier) || 
+        comment.body.startsWith(`## ${identifier}`) ||
+        comment.body.includes(`# ${identifier}`)
       );
+      if (existingComment) {
+        console.log(`Found existing comment by identifier: "${identifier}"`);
+      }
     }
 
     // Add comment ID if provided (for GitHub Actions workflow tracking)
@@ -75,6 +87,7 @@ async function createOrUpdateComment(github, context, prNumber, commentBody, ide
       commentBody;
 
     if (existingComment) {
+      console.log(`Updating existing comment (ID: ${existingComment.id})`);
       await github.rest.issues.updateComment({
         owner: context.repo.owner,
         repo: context.repo.repo,
@@ -83,12 +96,14 @@ async function createOrUpdateComment(github, context, prNumber, commentBody, ide
       });
       console.log('Successfully updated existing comment');
     } else {
+      console.log('Creating new comment');
       await github.rest.issues.createComment({
         owner: context.repo.owner,
         repo: context.repo.repo,
         issue_number: prNumber,
         body: finalCommentBody
       });
+      console.log('Successfully created new comment');
     }
   } catch (error) {
     console.error('Error posting/updating comment:', error);
