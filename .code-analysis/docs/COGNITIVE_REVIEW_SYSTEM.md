@@ -4,9 +4,11 @@
 
 > **In the AI era, code generation is no longer the bottleneck — human comprehension is.**
 > 
-> To sustain velocity and quality at scale, we must minimize unnecessary human review effort by aligning review depth with code risk, clarity, and impact. A tiered review model, combined with AI-assisted code analysis and structured tagging, enables us to triage changes efficiently, focus human review only where it matters most, and reduce the code-to-approval cycle time without compromising software integrity.
+> In the AI era, code generation is no longer the bottleneck — human comprehension is.
+To sustain velocity and quality at scale, we must minimize unnecessary human review effort by aligning review depth with code risk, clarity, and impact.
+A tiered review model, combined with AI-assisted code analysis and structured tagging, enables us to triage changes efficiently, focus human review only where it matters most, and reduce the code-to-approval cycle time without compromising software integrity.
 
-This is the foundational principle that drives our entire approach to modern code review.
+The goal is to move from a manual, text-heavy process to a more automated, context-rich, and visually intuitive one.
 
 ---
 
