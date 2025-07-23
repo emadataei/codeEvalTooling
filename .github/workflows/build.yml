@@ -282,33 +282,9 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const fs = require('fs');
-            const { createOrUpdateComment, getPRNumber } = require('./.code-analysis/scripts/pr-comment-utils');
-            
-            const prNumber = getPRNumber(context);
-            if (!prNumber) {
-              console.log('No PR number found, skipping comment');
-              return;
-            }
-            
-            // Try to load the comprehensive report from enhanced visuals
-            let reportContent = '';
-            try {
-              reportContent = fs.readFileSync('.code-analysis/outputs/comprehensive_pr_report.md', 'utf8');
-              console.log('Using comprehensive report from enhanced visuals workflow');
-            } catch (error) {
-              console.log('Enhanced visuals report not found, creating basic summary');
-              reportContent = '## 📊 PR Visual Summary\n\nBasic analysis completed. Enhanced visuals may be available in a separate workflow run.';
-            }
-            
-            await createOrUpdateComment(
-              github, 
-              context, 
-              prNumber, 
-              reportContent,
-              '📊 PR Visual Summary',
-              'pr-visual-summary'
-            );
+            const script = require('./.code-analysis/scripts/pr-visual-summary-comment.js');
+            const changedFiles = "${{ steps.changed-files.outputs.all_changed_files }}".split(' ').filter(f => f.trim());
+            return await script({ github, context, changedFiles });
 
       - name: Upload Visual Analysis Artifacts
         uses: actions/upload-artifact@v4

@@ -85,32 +85,68 @@ module.exports = async ({ github, context, changedFiles }) => {
     
     // Generate impact summary
     const totalFiles = Object.values(categories).reduce((sum, files) => sum + files.length, 0);
-    let impactSummary = '**Impact Summary:** ';
-    const summaryParts = [];
     
-    if (totalFiles > 0) {
-      Object.entries(categories).forEach(([category, files]) => {
-        if (files.length > 0) {
-          const percentage = Math.round((files.length / totalFiles) * 100);
-          let impact;
-          if (files.length > 5) {
-            impact = '🔴';
-          } else if (files.length > 2) {
-            impact = '🟡';
-          } else {
-            impact = '🟢';
-          }
-          summaryParts.push(`${impact} ${category}: ${files.length} (${percentage}%)`);
+    // Generate detailed file listing by category
+    let fileListings = '';
+    Object.entries(categories).forEach(([category, files]) => {
+      if (files.length > 0) {
+        let impact;
+        if (files.length > 5) {
+          impact = '🔴';
+        } else if (files.length > 2) {
+          impact = '🟡';
+        } else {
+          impact = '🟢';
         }
-      });
-      
-      impactSummary += summaryParts.join(' | ') + '\n\n';
+        
+        fileListings += `**${impact} ${category} (${files.length} files):**\n`;
+        
+        // Show first 5 files, then "... and X more" if there are more
+        const filesToShow = files.slice(0, 5);
+        filesToShow.forEach(file => {
+          fileListings += `- \`${file}\`\n`;
+        });
+        
+        if (files.length > 5) {
+          fileListings += `- ... and ${files.length - 5} more files\n`;
+        }
+        fileListings += '\n';
+      }
+    });
+
+    // Create comprehensive visual summary section
+    const visualSection = `## 🎯 PR Visual Summary
+
+### 🗂️ File Changes Overview
+
+${mermaid}
+
+### 📊 Change Statistics
+| Category | Files | Impact |
+|----------|-------|--------|
+${Object.entries(categories)
+  .filter(([_, files]) => files.length > 0)
+  .map(([category, files]) => {
+    const percentage = Math.round((files.length / totalFiles) * 100);
+    let impact;
+    let impactText;
+    if (files.length > 5) {
+      impact = '🔴';
+      impactText = 'High';
+    } else if (files.length > 2) {
+      impact = '🟡';
+      impactText = 'Medium';
     } else {
-      impactSummary += 'No significant file changes detected\n\n';
+      impact = '🟢';
+      impactText = 'Low';
     }
-    
-    // Create visual summary section
-    const visualSection = `## 📊 Visual Overview\n\n${mermaid}${impactSummary}`;
+    return `| ${category} | ${files.length} | ${impact} ${impactText} (${percentage}%) |`;
+  })
+  .join('\n')}
+
+### 🔍 Quick Navigation
+${fileListings}
+`;
     
     // Get current PR
     const { data: pr } = await github.rest.pulls.get({
@@ -121,7 +157,8 @@ module.exports = async ({ github, context, changedFiles }) => {
     
     let body = pr.body || '';
     
-    // Remove existing visual overview if present
+    // Remove existing visual overview/summary if present (handle both old and new formats)
+    body = body.replace(/## 🎯 PR Visual Summary[\s\S]*?(?=##|$)/g, '').trim();
     body = body.replace(/## 📊 Visual Overview[\s\S]*?(?=##|$)/g, '').trim();
     
     // Add visual summary at the end of description
@@ -161,9 +198,10 @@ module.exports = async ({ github, context, changedFiles }) => {
       });
       
       let body = pr.body || '';
+      body = body.replace(/## 🎯 PR Visual Summary[\s\S]*?(?=##|$)/g, '').trim();
       body = body.replace(/## 📊 Visual Overview[\s\S]*?(?=##|$)/g, '').trim();
       
-      const fallbackSection = `## 📊 Visual Overview\n\n**Status:** Visual summary generation encountered an error. Please check the workflow logs for details.\n\n`;
+      const fallbackSection = `## 🎯 PR Visual Summary\n\n**Status:** Visual summary generation encountered an error. Please check the workflow logs for details.\n\n`;
       
       if (body && !body.endsWith('\n\n')) {
         body += '\n\n';
