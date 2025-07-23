@@ -34,6 +34,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          # Install system dependencies for visual graph generation
+          sudo apt-get update
+          sudo apt-get install -y graphviz
 
       - name: Run Static Analysis
         run: |
@@ -82,6 +85,7 @@ jobs:
           CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
         run: |
           python .code-analysis/scripts/run_cognitive_analysis.py
+          echo "AI-generated analysis for review triage"
 
       - name: Run AI Pre-Review Analysis
         env:
@@ -93,6 +97,19 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           python .code-analysis/scripts/ai_pre_review.py
+          echo "AI-generated analysis for review triage"
+
+      - name: Generate Semantic Commit Story
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AI_FOUNDRY_ENDPOINT: ${{ secrets.AI_FOUNDRY_ENDPOINT }}
+          AI_FOUNDRY_MODEL: ${{ secrets.AI_FOUNDRY_MODEL }}
+          AI_FOUNDRY_TOKEN: ${{ secrets.AI_FOUNDRY_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          python .code-analysis/scripts/semantic_commit_analyzer.py
+          echo "AI-generated analysis for review triage"
+        continue-on-error: true
 
       - name: Analyze UI Changes
         env:
@@ -101,6 +118,50 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           python .code-analysis/scripts/simple_ui_analyzer.py
+        continue-on-error: true
+
+      - name: Run Intent Classification Analysis
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AI_FOUNDRY_ENDPOINT: ${{ secrets.AI_FOUNDRY_ENDPOINT }}
+          AI_FOUNDRY_MODEL: ${{ secrets.AI_FOUNDRY_MODEL }}
+          AI_FOUNDRY_TOKEN: ${{ secrets.AI_FOUNDRY_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          python .code-analysis/scripts/intent_classifier.py \
+            --repo . \
+            --title "${{ github.event.pull_request.title }}" \
+            --description "${{ github.event.pull_request.body }}" \
+            --pr-output
+          echo "AI-generated analysis for review triage"
+        continue-on-error: true
+
+      - name: Run Impact Prediction Analysis
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AI_FOUNDRY_ENDPOINT: ${{ secrets.AI_FOUNDRY_ENDPOINT }}
+          AI_FOUNDRY_MODEL: ${{ secrets.AI_FOUNDRY_MODEL }}
+          AI_FOUNDRY_TOKEN: ${{ secrets.AI_FOUNDRY_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          python .code-analysis/scripts/impact_predictor.py \
+            --repo . \
+            --pr-title "${{ github.event.pull_request.title }}" \
+            --pr-description "${{ github.event.pull_request.body }}" \
+            --pr-output
+          echo "AI-generated analysis for review triage"
+        continue-on-error: true
+
+      - name: Generate Dependency Graph Analysis
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          python .code-analysis/scripts/dependency_graph_generator.py \
+            --repo . \
+            --before ${{ github.event.pull_request.base.sha }} \
+            --after ${{ github.event.pull_request.head.sha }} \
+            --pr-output
         continue-on-error: true
 
       - name: Setup Node.js for screenshots
@@ -157,26 +218,5 @@ jobs:
           python .code-analysis/scripts/update_pr_metadata.py \
             --pr-number ${{ github.event.pull_request.number }}
 
-      - name: Post UI Changes Comment
-        if: always()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const script = require('./.code-analysis/scripts/simple-ui-pr-comment.js');
-            return await script({ github, context });
-
-      - name: Post AI Pre-Review Comment
-        if: always()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const script = require('./.code-analysis/scripts/ai-pre-review-pr-comment.js');
-            return await script({ github, context });
-
-      - name: Post Cognitive Score Comment
-        if: always()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const script = require('./.code-analysis/scripts/cognitive-analysis-pr-comment.js');
-            return await script({ github, context });
+      # Note: All PR comments are now posted from the build.yml workflow
+      # in the correct priority order to ensure proper sequencing

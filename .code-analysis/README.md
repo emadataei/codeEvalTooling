@@ -15,6 +15,7 @@ An intelligent, tiered review system that:
 - **Routes changes** to appropriate reviewers based on difficulty
 - **Eliminates review bottlenecks** for simple changes
 - **Ensures expert attention** for complex, critical code
+- **Provides enhanced PR visuals** with dependency graphs, change heatmaps, and animated summaries
 
 ## Key Features
 
@@ -22,6 +23,13 @@ An intelligent, tiered review system that:
 - Multi-dimensional scoring (static analysis + AI assessment)
 - Risk-based tier assignment (0-2)
 - Quality gate with blocking issue detection
+
+### Enhanced PR Visuals
+- **Auto-detection**: Portable across any repository structure
+- **Dependency graphs**: Before/after module relationship visualization
+- **Change heatmaps**: Statistical breakdown of modifications
+- **Animated summaries**: Progressive reveal of PR impact
+- **Comprehensive reporting**: All analyses combined into a single report
 
 ### Automatic Team Assignment
 - Smart routing based on code complexity
@@ -35,15 +43,34 @@ An intelligent, tiered review system that:
 
 ### Rich Feedback
 - Detailed PR comments with complexity breakdown
+- Visual analysis with dependency and change insights
 - Actionable quality improvement suggestions
 - Clear review process guidance
 
 ## Quick Start
 
 1. **Set up AI provider** (Azure AI Foundry or OpenAI)
+2. **Copy `.code-analysis` and `.github` folders** to your repository
+3. **Install dependencies** (pip install -r requirements.txt)
 4. **Enable workflows** - they run automatically on PRs
 
-See [Setup Guide](docs/SETUP_GUIDE.md) for detailed instructions.
+The system is **100% portable** - just drop the folders into any repository and it works.
+
+## Available Workflows
+
+### Enhanced PR Visuals (`enhanced-pr-visuals.yml`)
+- **Auto-detects** project structure (Next.js, React, Vue, etc.)
+- **Generates dependency graphs** using madge for JavaScript/TypeScript projects
+- **Creates change heatmaps** showing modification intensity
+- **Provides animated summaries** with progressive impact reveal
+- **Combines everything** into a comprehensive visual report
+- **Updates PR comments** using shared utilities for consistency
+
+### Cognitive Scoring (`cognitive_scoring.yml`)
+- **Analyzes code complexity** using static analysis + AI
+- **Assigns review tiers** based on risk and complexity
+- **Routes to appropriate reviewers** automatically
+- **Provides quality feedback** with actionable suggestions
 
 ## 📖 Documentation
 

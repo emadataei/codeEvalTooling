@@ -1,0 +1,180 @@
+name: Enhanced PR Visuals
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+      - master
+      - develop
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  generate-enhanced-visuals:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: '**/package-lock.json'
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Create output directories
+        run: |
+          mkdir -p .code-analysis/outputs
+          mkdir -p .github/scripts
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          
+          # Install global tools
+          npm install -g madge
+          
+          # Install additional Python dependencies for visuals
+          pip install matplotlib seaborn pandas pillow
+
+      - name: Auto-detect project structure
+        id: detect-structure
+        run: python .code-analysis/scripts/detect_project_structure.py
+        continue-on-error: true
+        env:
+          GITHUB_OUTPUT: ${{ runner.temp }}/github_output
+
+      - name: Install project dependencies
+        run: python .code-analysis/scripts/install_project_dependencies.py
+        continue-on-error: true
+        env:
+          PROJECT_DIR: ${{ steps.detect-structure.outputs.project_dir }}
+          HAS_PACKAGE_JSON: ${{ steps.detect-structure.outputs.has_package_json }}
+
+      - name: Get changed files for analysis
+        id: changed-files
+        uses: tj-actions/changed-files@v41
+        with:
+          files: |
+            **/*.js
+            **/*.ts
+            **/*.jsx
+            **/*.tsx
+            **/*.vue
+            **/*.json
+            **/*.md
+            **/*.yml
+            **/*.yaml
+
+      - name: Generate diff stats
+        run: |
+          git diff --numstat origin/${{ github.base_ref }} > .code-analysis/outputs/diff_stats.txt
+          echo "📊 Diff stats generated:"
+          head -10 .code-analysis/outputs/diff_stats.txt
+
+      - name: Generate dependency graphs
+        run: python .code-analysis/scripts/generate_dependency_graphs.py
+        continue-on-error: true
+        env:
+          GITHUB_BASE_REF: ${{ github.base_ref }}
+          GITHUB_HEAD_REF: ${{ github.head_ref }}
+          PROJECT_DIR: ${{ steps.detect-structure.outputs.project_dir }}
+          SOURCE_DIRS: ${{ steps.detect-structure.outputs.source_dirs }}
+          PROJECT_TYPE: ${{ steps.detect-structure.outputs.project_type }}
+
+      - name: Generate change heatmap
+        run: python .code-analysis/scripts/generate_change_heatmap.py
+        continue-on-error: true
+
+      - name: Generate animated summary
+        run: python .code-analysis/scripts/generate_animated_summary.py
+        continue-on-error: true
+        env:
+          PROJECT_DIR: ${{ steps.detect-structure.outputs.project_dir }}
+          SOURCE_DIRS: ${{ steps.detect-structure.outputs.source_dirs }}
+          PROJECT_TYPE: ${{ steps.detect-structure.outputs.project_type }}
+
+      - name: Generate comprehensive report
+        run: python .code-analysis/scripts/generate_comprehensive_report.py
+        continue-on-error: true
+        env:
+          PROJECT_DIR: ${{ steps.detect-structure.outputs.project_dir }}
+          SOURCE_DIRS: ${{ steps.detect-structure.outputs.source_dirs }}
+          PROJECT_TYPE: ${{ steps.detect-structure.outputs.project_type }}
+
+      - name: Generate enhanced visuals report
+        run: |
+          echo "📊 Generating enhanced visuals report with embedded images..."
+          node .code-analysis/scripts/generate-embedded-visuals.js
+
+      - name: Upload all visual artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: enhanced-pr-visuals
+          path: |
+            .code-analysis/outputs/dependency_graph_base.png
+            .code-analysis/outputs/dependency_graph_pr.png
+            .code-analysis/outputs/change_heatmap.png
+            .code-analysis/outputs/comprehensive_pr_report.md
+            .code-analysis/outputs/enhanced_image_report.md
+            .code-analysis/outputs/animated_summary.md
+            .code-analysis/outputs/diff_stats.txt
+            .code-analysis/outputs/enhanced_visuals_results.json
+            .code-analysis/outputs/*.svg
+            .code-analysis/outputs/*.json
+          retention-days: 30
+
+      - name: Comment PR with enhanced visuals
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const { createOrUpdateComment, getPRNumber } = require('./.code-analysis/scripts/pr-comment-utils');
+            
+            const prNumber = getPRNumber(context);
+            if (!prNumber) {
+              console.log('No PR number found, skipping comment');
+              return;
+            }
+            
+            // Load the enhanced image report with embedded visuals
+            let reportContent = '';
+            try {
+              reportContent = fs.readFileSync('.code-analysis/outputs/enhanced_image_report.md', 'utf8');
+              console.log('✅ Using enhanced image report with embedded visuals');
+            } catch (error) {
+              console.log('Could not read enhanced image report:', error.message);
+              // Fallback to comprehensive report if available
+              try {
+                reportContent = fs.readFileSync('.code-analysis/outputs/comprehensive_pr_report.md', 'utf8');
+                console.log('📋 Fallback to comprehensive report');
+              } catch (fallbackError) {
+                console.log('Could not read any report files:', fallbackError.message);
+                reportContent = '## 🎬 Enhanced PR Visuals\n\nAnalysis completed but reports not found. Some visual generation steps may have failed.\n\nCheck the [workflow artifacts](../actions/runs/${{ github.run_id }}) for generated files.';
+              }
+            }
+            
+            await createOrUpdateComment(
+              github, 
+              context, 
+              prNumber, 
+              reportContent,
+              '🎬 Enhanced PR Visuals',
+              'enhanced-pr-visuals'
+            );
