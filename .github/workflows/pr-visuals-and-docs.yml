@@ -1,6 +1,10 @@
 name: PR Visuals and Documentation
 
 on:
+  push:
+    branches:
+      - master
+      - main
   pull_request:
     types: [opened, synchronize, reopened]
     branches:
@@ -86,7 +90,7 @@ jobs:
       - name: Generate diff stats
         run: |
           git diff --numstat origin/${{ github.base_ref }} > .code-analysis/outputs/diff_stats.txt
-          echo "📊 Diff stats generated:"
+          echo "Diff stats generated:"
           head -10 .code-analysis/outputs/diff_stats.txt
 
       - name: Generate dependency graphs
@@ -121,12 +125,12 @@ jobs:
 
       - name: Generate enhanced visuals report
         run: |
-          echo "📊 Generating enhanced visuals report with embedded images..."
+          echo "Generating enhanced visuals report with embedded images..."
           node .code-analysis/scripts/generate-embedded-visuals.js
 
       - name: Generate documentation suggestions
         run: |
-          echo "📝 Analyzing documentation needs..."
+          echo "Analyzing documentation needs..."
           python .code-analysis/scripts/generate_documentation_suggestions.py
         continue-on-error: true
         env:
