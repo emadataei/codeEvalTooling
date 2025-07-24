@@ -77,12 +77,15 @@ ENV/
 
 # Python local libraries
 Lib/
-Scripts/
+/Scripts/
 Include/
 pyvenv.cfg
 
 # Code analysis outputs
 .code-analysis/outputs/
+
+# Local visual testing and sample files
+local-visual-test/
 
 # Generated images and visualizations
 *.png

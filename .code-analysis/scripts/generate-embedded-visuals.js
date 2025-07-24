@@ -38,7 +38,7 @@ function generateImageDisplayOptions(imagePath, title, base64Data) {
     
     // Provide technical details in a collapsible section
     content += `<details>\n`;
-    content += `<summary>� Image Details</summary>\n\n`;
+    content += `<summary>Image Details</summary>\n\n`;
     content += `- **File:** \`${fileName}\`\n`;
     content += `- **Size:** ${(Buffer.byteLength(base64Data.split(',')[1], 'base64') / 1024).toFixed(1)} KB\n`;
     content += `- **Format:** ${getImageFormat(fileName)}\n`;
@@ -82,21 +82,23 @@ async function generateEnhancedImageReport() {
   const outputsDir = '.code-analysis/outputs';
   const rootDir = '.';
   
+  // Ensure outputs directory exists
+  if (!fs.existsSync(outputsDir)) {
+    fs.mkdirSync(outputsDir, { recursive: true });
+    console.log(`Created outputs directory: ${outputsDir}`);
+  }
+  
   // Define images with their locations (check root first, then outputs)
   const images = {
     'impact_heatmap.png': 'Change Impact Heatmap',
     'development_flow.png': 'Development Flow',
     'story_arc.gif': 'Story Arc Animation',
-    'dependency_graph_base.png': 'Base Branch Dependencies',
-    'dependency_graph_pr.png': 'PR Branch Dependencies', 
-    'change_heatmap.png': 'Change Heatmap Analysis'
+    'dependency_graph_pr.png': 'PR Dependencies'
   };
   
   // Also check for SVG alternatives
   const svgAlternatives = {
-    'dependency_graph_base.svg': 'Base Branch Dependencies',
-    'dependency_graph_pr.svg': 'PR Branch Dependencies', 
-    'change_heatmap.svg': 'Change Heatmap Analysis',
+    'dependency_graph_pr.svg': 'PR Dependencies', 
     'development_flow.svg': 'Development Flow'
   };
   
@@ -205,7 +207,7 @@ async function generateFileListingSection(outputsDir) {
         const sizeKB = (stats.size / 1024).toFixed(1);
         const type = getFileType(file);
         const isImage = /\.(png|jpg|jpeg|gif|svg)$/i.test(file);
-        const status = isImage ? '🖼️ Image' : '📄 Data';
+        const status = isImage ? 'Image' : 'Data';
         content += `| \`${file}\` | ${sizeKB} KB | ${type} | ${status} |\n`;
       });
       
@@ -223,11 +225,11 @@ async function generateFileListingSection(outputsDir) {
 
 function getFileType(fileName) {
   const ext = path.extname(fileName).toLowerCase();
-  if (['.json'].includes(ext)) return '📊 Data';
-  if (['.md'].includes(ext)) return '📝 Report';
-  if (['.txt'].includes(ext)) return '📄 Text';
-  if (['.png', '.jpg', '.gif', '.svg'].includes(ext)) return '🖼️ Image';
-  return '📁 File';
+  if (['.json'].includes(ext)) return 'Data';
+  if (['.md'].includes(ext)) return 'Report';
+  if (['.txt'].includes(ext)) return 'Text';
+  if (['.png', '.jpg', '.gif', '.svg'].includes(ext)) return 'Image';
+  return 'File';
 }
 
 // Main execution
