@@ -96,14 +96,6 @@ jobs:
           AI_FOUNDRY_TOKEN: ${{ secrets.AI_FOUNDRY_TOKEN }}
           AI_FOUNDRY_MODEL: ${{ secrets.AI_FOUNDRY_MODEL }}
         continue-on-error: true
-      
-      - name: Add Quality Gate Summary to PR
-        if: always() && github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const script = require('./.code-analysis/scripts/quality-gate-pr-comment.js');
-            return await script({ github, context });
 
       - name: Upload Quality Gate Results
         uses: actions/upload-artifact@v4
@@ -116,6 +108,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
         run: |
           python .code-analysis/scripts/dependency_graph_generator.py \
             --repo . \
@@ -136,36 +129,17 @@ jobs:
       - name: Post Dependency Graph Comment (2nd)
         if: always() && github.event_name == 'pull_request'
         uses: actions/github-script@v7
+        env:
+          CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
         with:
           script: |
             const script = require('./.code-analysis/scripts/dependency-graph-pr-comment.js');
             return await script({ github, context });
 
-      # PR Visual Summary is now handled by the enhanced-pr-visuals workflow
-      # which has access to generated images and enhanced analytics
-      # - name: Generate and Add PR Visual Summary to Description
-      #   if: always() && github.event_name == 'pull_request'
-      #   uses: actions/github-script@v7
-      #   with:
-      #     script: |
-      #       const script = require('./.code-analysis/scripts/pr-visual-summary-description.js');
-      #       const changedFiles = "${{ steps.changed-files.outputs.all_changed_files }}".split(' ').filter(f => f.trim());
-      #       return await script({ github, context, changedFiles });
-
-      # - name: Post PR Visual Summary Comment (Last - Overview)
-      #   if: always() && github.event_name == 'pull_request'
-      #   uses: actions/github-script@v7
-      #   with:
-      #     github-token: ${{ secrets.GITHUB_TOKEN }}
-      #     script: |
-      #       const script = require('./.code-analysis/scripts/pr-visual-summary-comment.js');
-      #       const changedFiles = "${{ steps.changed-files.outputs.all_changed_files }}".split(' ').filter(f => f.trim());
-      #       return await script({ github, context, changedFiles });
-
-      - name: Upload Visual Analysis Artifacts
+      - name: Upload Technical Analysis Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: visual-analysis-graphs
+          name: technical-analysis-results
           path: |
             dependency_graph.png
             dependency_graph.html
