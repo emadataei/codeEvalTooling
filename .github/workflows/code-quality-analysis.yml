@@ -136,15 +136,22 @@ jobs:
             const script = require('./.code-analysis/scripts/dependency-graph-pr-comment.js');
             return await script({ github, context });
 
+      - name: Check for generated artifacts
+        id: check-artifacts
+        run: |
+          if ls dependency_graph_pr.png *.html *.txt 2>/dev/null; then
+            echo "artifacts-exist=true" >> $GITHUB_OUTPUT
+          else
+            echo "artifacts-exist=false" >> $GITHUB_OUTPUT
+          fi
+        continue-on-error: true
+
       - name: Upload Technical Analysis Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: technical-analysis-results
           path: |
-            dependency_graph.png
-            dependency_graph.html
-            dependency_graph.txt
-            impact_heatmap.png
-            development_flow.png
-            story_arc.gif
-        if: always() && github.event_name == 'pull_request'
+            dependency_graph_pr.png
+            *.html
+            *.txt
+        if: always() && github.event_name == 'pull_request' && steps.check-artifacts.outputs.artifacts-exist == 'true'
