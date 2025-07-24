@@ -90,6 +90,7 @@ async function generateEnhancedImageReport() {
   
   // Define images with their locations (check root first, then outputs)
   const images = {
+    'change_heatmap.png': 'Change Impact Heatmap',
     'impact_heatmap.png': 'Change Impact Heatmap',
     'development_flow.png': 'Development Flow',
     'story_arc.gif': 'Story Arc Animation',

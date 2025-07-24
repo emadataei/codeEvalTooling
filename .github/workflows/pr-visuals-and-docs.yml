@@ -43,11 +43,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           
+          # Install system dependencies for visualization
+          sudo apt-get update
+          sudo apt-get install -y graphviz graphviz-dev
+          
           # Install global tools
           npm install -g madge
           
           # Install additional Python dependencies for visuals
-          pip install matplotlib seaborn pandas pillow
+          pip install matplotlib seaborn pandas pillow numpy
+          
+          # Install graphviz Python bindings
+          pip install graphviz
           
           # Install Azure AI dependencies for smart documentation analysis
           pip install azure-ai-inference azure-identity
@@ -101,6 +108,18 @@ jobs:
         run: python .code-analysis/scripts/generate_change_heatmap.py
         continue-on-error: true
 
+      - name: Generate impact heatmap
+        run: python .code-analysis/scripts/generate_impact_heatmap.py
+        continue-on-error: true
+
+      - name: Generate development flow
+        run: python .code-analysis/scripts/generate_development_flow.py
+        continue-on-error: true
+
+      - name: Generate story arc animation
+        run: python .code-analysis/scripts/generate_story_arc.py
+        continue-on-error: true
+
       - name: Generate animated summary
         run: python .code-analysis/scripts/generate_animated_summary.py
         continue-on-error: true
@@ -120,7 +139,14 @@ jobs:
       - name: Generate enhanced visuals report
         run: |
           echo "Generating enhanced visuals report with embedded images..."
-          node .code-analysis/scripts/generate-embedded-visuals.js
+          if [ -f ".code-analysis/scripts/generate-embedded-visuals.js" ]; then
+            node .code-analysis/scripts/generate-embedded-visuals.js
+          else
+            echo "Enhanced visuals script not found"
+            mkdir -p .code-analysis/outputs
+            echo "# Enhanced Visuals Report" > .code-analysis/outputs/enhanced_image_report.md
+            echo "Enhanced visuals script was not found in the repository." >> .code-analysis/outputs/enhanced_image_report.md
+          fi
 
       - name: Generate documentation suggestions
         run: |
@@ -137,12 +163,16 @@ jobs:
 
       - name: Upload all visual artifacts
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: pr-visuals-and-docs
           path: |
             .code-analysis/outputs/dependency_graph_base.png
             .code-analysis/outputs/dependency_graph_pr.png
             .code-analysis/outputs/change_heatmap.png
+            .code-analysis/outputs/impact_heatmap.png
+            .code-analysis/outputs/development_flow.png
+            .code-analysis/outputs/story_arc.gif
             .code-analysis/outputs/comprehensive_pr_report.md
             .code-analysis/outputs/enhanced_image_report.md
             .code-analysis/outputs/documentation_suggestions.md
@@ -152,6 +182,9 @@ jobs:
             .code-analysis/outputs/documentation_analysis.json
             .code-analysis/outputs/*.svg
             .code-analysis/outputs/*.json
+            .code-analysis/outputs/*.md
+            .code-analysis/outputs/*.png
+            .code-analysis/outputs/*.gif
           retention-days: 30
 
       - name: Comment PR with enhanced visuals

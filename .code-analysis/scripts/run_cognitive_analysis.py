@@ -170,12 +170,19 @@ def main():
             f.write(f"total_score={result['total_score']}\n")
             f.write(f"reasoning={result['reasoning']}\n")
     
+    # Ensure outputs directory exists
+    os.makedirs('.code-analysis/outputs', exist_ok=True)
+    
     # Create detailed results file
-    with open('cognitive-analysis-results.json', 'w') as f:
+    with open('.code-analysis/outputs/cognitive-analysis-results.json', 'w') as f:
         json.dump(result, f, indent=2)
     
     # Also create the legacy filename for compatibility
-    with open('cognitive_score.json', 'w') as f:
+    with open('.code-analysis/outputs/cognitive_score.json', 'w') as f:
+        json.dump(result, f, indent=2)
+    
+    # Create the file that story_arc.py expects
+    with open('.code-analysis/outputs/cognitive_analysis.json', 'w') as f:
         json.dump(result, f, indent=2)
 
 

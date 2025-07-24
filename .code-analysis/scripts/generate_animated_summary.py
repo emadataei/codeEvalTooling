@@ -64,27 +64,27 @@ def _parse_diff_line(line):
 
 
 def get_project_emoji(project_type):
-    """Get emoji for project type"""
+    """Get text indicator for project type"""
     emoji_map = {
-        'nextjs': '⚡',
-        'react': '⚛️',
-        'vue': '💚',
-        'angular': '🅰️',
-        'vite': '⚡',
-        'svelte': '🧡',
-        'generic': '📦'
+        'nextjs': 'Next.js',
+        'react': 'React',
+        'vue': 'Vue',
+        'angular': 'Angular',
+        'vite': 'Vite',
+        'svelte': 'Svelte',
+        'generic': 'Generic'
     }
-    return emoji_map.get(project_type, '📦')
+    return emoji_map.get(project_type, 'Generic')
 
 
 def get_complexity_level(total_changes, total_files):
     """Determine complexity level based on changes"""
     if total_changes > 500 or total_files > 15:
-        return '🔴 High', '45-60 min'
+        return 'High', '45-60 min'
     elif total_changes > 100 or total_files > 8:
-        return '🟡 Medium', '15-30 min'
+        return 'Medium', '15-30 min'
     else:
-        return '🟢 Low', '5-15 min'
+        return 'Low', '5-15 min'
 
 
 def get_complexity_level_text(total_changes, total_files):
@@ -100,11 +100,11 @@ def get_complexity_level_text(total_changes, total_files):
 def get_scope_level(total_files):
     """Determine scope level based on number of files"""
     if total_files > 10:
-        return '🔴 Broad'
+        return 'Broad'
     elif total_files > 5:
-        return '🟡 Medium'
+        return 'Medium'
     else:
-        return '🟢 Focused'
+        return 'Focused'
 
 
 def get_scope_level_text(total_files):
@@ -121,7 +121,7 @@ def get_project_specific_insights(project_type):
     """Get insights specific to the detected project type"""
     insights = {
         'nextjs': """
-## ⚡ Next.js Specific Insights
+## Next.js Specific Insights
 
 - Check for App Router vs Pages Router changes
 - Review any middleware or configuration updates  
@@ -129,7 +129,7 @@ def get_project_specific_insights(project_type):
 - Consider impact on build performance
 """,
         'react': """
-## ⚛️ React Specific Insights
+## React Specific Insights
 
 - Review component architecture changes
 - Check for hook usage patterns
@@ -137,7 +137,7 @@ def get_project_specific_insights(project_type):
 - Consider state management implications
 """,
         'vue': """
-## 💚 Vue Specific Insights
+## Vue Specific Insights
 
 - Review component composition changes
 - Check for reactivity patterns
@@ -145,7 +145,7 @@ def get_project_specific_insights(project_type):
 - Consider Vue 3 vs Vue 2 compatibility
 """,
         'angular': """
-## 🅰️ Angular Specific Insights
+## Angular Specific Insights
 
 - Review module dependency changes
 - Check for service injection patterns
@@ -153,7 +153,7 @@ def get_project_specific_insights(project_type):
 - Consider change detection impact
 """,
         'vite': """
-## ⚡ Vite Specific Insights
+## Vite Specific Insights
 
 - Review build configuration changes
 - Check for plugin compatibility
@@ -161,7 +161,7 @@ def get_project_specific_insights(project_type):
 - Consider bundle optimization impact
 """,
         'generic': """
-## 📦 General Project Insights
+## General Project Insights
 
 - Review code organization changes
 - Check for dependency updates
@@ -193,39 +193,39 @@ def generate_animated_summary():
     source_display = ', '.join(source_dirs) if source_dirs else 'auto-detected'
     
     # Generate the animated summary
-    animation_md = f"""# 🎬 PR Animation Summary
+    animation_md = f"""# PR Animation Summary
 
-## 📈 Change Progression
+## Change Progression
 
 ```
-🚀 PR Impact Analysis for {project_emoji} {project_type.title()} Project
-═══════════════════════════════════════════════════════════════
-📁 Files Changed: {total_files}
-📝 Total Lines: {total_changes}
-📂 Project Structure: {project_dir}
-🎯 Project Type: {project_type.title()}
+PR Impact Analysis for {project_emoji} {project_type.title()} Project
+===============================================================
+Files Changed: {total_files}
+Total Lines: {total_changes}
+Project Structure: {project_dir}
+Project Type: {project_type.title()}
 ```
 
-## 🎯 Visual Story
+## Visual Story
 
-> **Step 1:** 📊 Analyzing {project_type} codebase changes...
+> **Step 1:** Analyzing {project_type} codebase changes...
 > 
-> **Step 2:** 🔍 Scanning directories: {source_display}
+> **Step 2:** Scanning directories: {source_display}
 > 
-> **Step 3:** 🎨 Creating visual summaries...
+> **Step 3:** Creating visual summaries...
 > 
-> **Step 4:** ✨ Ready for review!
+> **Step 4:** Ready for review!
 
-## 📋 Quick Stats
+## Quick Stats
 
 - **Complexity:** {complexity}
 - **Scope:** {scope}
 - **Review Time:** {review_time}
-- **Project Structure:** {'🎯 Well-organized' if len(source_dirs) > 1 else '📁 Simple'}
+- **Project Structure:** {'Well-organized' if len(source_dirs) > 1 else 'Simple'}
 
 {get_project_specific_insights(project_type)}
 
-## 🔍 Review Checklist
+## Review Checklist
 
 Based on your {project_type} project, consider reviewing:
 
