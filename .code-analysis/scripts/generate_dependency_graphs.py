@@ -56,7 +56,7 @@ def find_analyzable_paths(project_dir, source_dirs):
                       list(src_path.glob('**/*.jsx')) + list(src_path.glob('**/*.tsx'))
             if js_files:
                 paths_to_analyze.append(str(src_path))
-                print(f"✅ Found {len(js_files)} JS/TS files in {src_path}")
+                print(f"Found {len(js_files)} JS/TS files in {src_path}")
     
     # If no source dirs found, analyze project directory
     if not paths_to_analyze:
@@ -66,7 +66,7 @@ def find_analyzable_paths(project_dir, source_dirs):
                       list(project_path.glob('*.jsx')) + list(project_path.glob('*.tsx'))
             if js_files:
                 paths_to_analyze.append(str(project_path))
-                print(f"✅ Found {len(js_files)} JS/TS files in project root")
+                print(f"Found {len(js_files)} JS/TS files in project root")
     
     return paths_to_analyze
 
@@ -106,7 +106,7 @@ def create_placeholder_graph(output_file, message, graph_type="Dependency Analys
         plt.savefig(output_file, dpi=150, bbox_inches='tight', facecolor='white', edgecolor='none')
         plt.close()
         
-        print(f"📋 Created placeholder graph: {output_file}")
+        print(f"Created placeholder graph: {output_file}")
         return True
     except Exception as e:
         print(f"Failed to create placeholder: {e}")
@@ -130,23 +130,40 @@ def generate_dependency_graph(branch_name, output_file, project_structure):
     
     # Try each path until one works
     for analyze_path in analyze_paths:
-        print(f"🔍 Analyzing path: {analyze_path}")
+        print(f"Analyzing path: {analyze_path}")
+        
+        # Generate both PNG and SVG versions
+        png_file = output_file
+        svg_file = output_file.replace('.png', '.svg')
         
         # Generate graph with different madge options
         commands_to_try = [
-            f"madge --image {output_file} --layout dot {analyze_path}",
-            f"madge --image {output_file} --layout circo {analyze_path}",
-            f"madge --image {output_file} {analyze_path}",
-            f"madge --image {output_file} --exclude 'node_modules|\.git|dist|build' {analyze_path}"
+            f"madge --image {png_file} --layout dot {analyze_path}",
+            f"madge --image {svg_file} --layout dot {analyze_path}",
+            f"madge --image {png_file} --layout circo {analyze_path}",
+            f"madge --image {svg_file} --layout circo {analyze_path}",
+            f"madge --image {png_file} {analyze_path}",
+            f"madge --image {svg_file} {analyze_path}",
+            f"madge --image {png_file} --exclude 'node_modules|\.git|dist|build' {analyze_path}",
+            f"madge --image {svg_file} --exclude 'node_modules|\.git|dist|build' {analyze_path}"
         ]
+        
+        png_generated = False
+        svg_generated = False
         
         for cmd in commands_to_try:
             print(f"Trying: {cmd}")
             run_command(cmd)
             
-            if Path(output_file).exists():
-                print(f"✅ Graph generated: {output_file}")
-                return True
+            if png_file in cmd and Path(png_file).exists():
+                print(f"PNG graph generated: {png_file}")
+                png_generated = True
+            elif svg_file in cmd and Path(svg_file).exists():
+                print(f"SVG graph generated: {svg_file}")
+                svg_generated = True
+        
+        if png_generated or svg_generated:
+            return True
         
         print(f"Failed to generate graph for {analyze_path}")
     

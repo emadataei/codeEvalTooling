@@ -84,6 +84,11 @@ pyvenv.cfg
 # Code analysis outputs
 .code-analysis/outputs/
 
+# Generated analysis files (should be in outputs directory)
+cognitive_score.json
+cognitive-analysis-results.json
+cognitive_analysis.json
+
 # Local visual testing and sample files
 local-visual-test/
 
