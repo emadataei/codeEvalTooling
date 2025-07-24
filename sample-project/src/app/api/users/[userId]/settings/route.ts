@@ -85,6 +85,7 @@ export async function PUT(
     console.log(`User ${userId} updated settings:`, {
       timestamp: new Date().toISOString(),
       changes: Object.keys(validatedSettings),
+      userAgent: request.headers.get('user-agent') || 'unknown',
     });
 
     return NextResponse.json({
