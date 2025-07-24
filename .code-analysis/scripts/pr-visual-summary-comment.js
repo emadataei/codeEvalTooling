@@ -16,15 +16,23 @@ module.exports = async ({ github, context, changedFiles }) => {
       return;
     }
     
-    // Try to load the comprehensive report from enhanced visuals
+    // Try to load enhanced visuals reports
     let reportContent = '';
-    try {
+    
+    // First try enhanced image report
+    if (fs.existsSync('.code-analysis/outputs/enhanced_image_report.md')) {
+      reportContent = fs.readFileSync('.code-analysis/outputs/enhanced_image_report.md', 'utf8');
+      console.log('Using enhanced image report with embedded visuals');
+    }
+    // Then try comprehensive report
+    else if (fs.existsSync('.code-analysis/outputs/comprehensive_pr_report.md')) {
       reportContent = fs.readFileSync('.code-analysis/outputs/comprehensive_pr_report.md', 'utf8');
       console.log('Using comprehensive report from enhanced visuals workflow');
-    } catch (fileError) {
-      console.log('Enhanced visuals report not found, generating basic visual summary:', fileError.message);
+    }
+    // Generate basic visual summary as fallback
+    else {
+      console.log('No enhanced visuals reports found, generating basic visual summary');
       
-      // Generate basic visual summary
       const files = changedFiles || [];
       const filteredFiles = files.filter(f => f && f.trim());
       
@@ -37,9 +45,7 @@ module.exports = async ({ github, context, changedFiles }) => {
           'Tests': [],
           'Config': [],
           'Documentation': []
-        };
-        
-        filteredFiles.forEach(file => {
+        };        filteredFiles.forEach(file => {
           if (!file.trim()) return;
           
           const filePath = path.parse(file);
@@ -73,32 +79,32 @@ module.exports = async ({ github, context, changedFiles }) => {
           const categoryBreakdown = Object.entries(activeCategories).map(([category, files]) => {
             let impact;
             if (files.length > 5) {
-              impact = '🔴 High';
+              impact = 'High';
             } else if (files.length > 2) {
-              impact = '🟡 Medium';
+              impact = 'Medium';
             } else {
-              impact = '🟢 Low';
+              impact = 'Low';
             }
             const percentage = Math.round((files.length / totalFiles) * 100);
             return `- **${category}:** ${files.length} files (${percentage}%) ${impact}`;
           }).join('\n');
           
-          reportContent = `## 🎯 PR Visual Summary
+          reportContent = `## PR Visual Summary
 
-### 📊 Quick Stats
+### Quick Stats
 - **Total Files Changed:** ${totalFiles}
 - **Categories Affected:** ${Object.keys(activeCategories).length}
 
-### 📋 Category Breakdown
+### Category Breakdown
 ${categoryBreakdown}
 
 *Enhanced visuals and detailed analysis may be available in the enhanced-pr-visuals workflow.*`;
         } else {
-          reportContent = '## 🎯 PR Visual Summary\n\n**Status:** Analysis completed with basic metrics. Enhanced visuals may be available in a separate workflow run.';
+          reportContent = '## PR Visual Summary\n\n**Status:** Analysis completed with basic metrics. Enhanced visuals may be available in a separate workflow run.';
         }
       } catch (scriptError) {
         console.error('Error running visual summary script:', scriptError);
-        reportContent = '## 🎯 PR Visual Summary\n\n**Status:** Analysis completed. Enhanced visuals may be available in a separate workflow run.';
+        reportContent = '## PR Visual Summary\n\n**Status:** Analysis completed. Enhanced visuals may be available in a separate workflow run.';
       }
     }
     
@@ -107,7 +113,7 @@ ${categoryBreakdown}
       context, 
       prNumber, 
       reportContent,
-      '🎯 PR Visual Summary',
+      'PR Visual Summary',
       'pr-visual-summary'
     );
     

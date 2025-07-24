@@ -61,11 +61,11 @@ module.exports = async ({ github, context, changedFiles }) => {
           const catId = `CAT${nodeId}`;
           let impact;
           if (files.length > 5) {
-            impact = '🔴';
+            impact = 'High';
           } else if (files.length > 2) {
-            impact = '🟡';
+            impact = 'Medium';
           } else {
-            impact = '🟢';
+            impact = 'Low';
           }
           mermaid += `    ${catId}[${impact} ${category}<br/>${files.length} files]\n`;
           mermaid += `    PR --> ${catId}\n`;
@@ -92,11 +92,11 @@ module.exports = async ({ github, context, changedFiles }) => {
       if (files.length > 0) {
         let impact;
         if (files.length > 5) {
-          impact = '🔴';
+          impact = 'HIGH';
         } else if (files.length > 2) {
-          impact = '🟡';
+          impact = 'MEDIUM';
         } else {
-          impact = '🟢';
+          impact = 'LOW';
         }
         
         fileListings += `**${impact} ${category} (${files.length} files):**\n`;
@@ -117,11 +117,11 @@ module.exports = async ({ github, context, changedFiles }) => {
     // Create comprehensive visual summary section
     const visualSection = `## 🎯 PR Visual Summary
 
-### 🗂️ File Changes Overview
+### File Changes Overview
 
 ${mermaid}
 
-### 📊 Change Statistics
+### Change Statistics
 | Category | Files | Impact |
 |----------|-------|--------|
 ${Object.entries(categories)
@@ -131,20 +131,20 @@ ${Object.entries(categories)
     let impact;
     let impactText;
     if (files.length > 5) {
-      impact = '🔴';
+      impact = 'HIGH';
       impactText = 'High';
     } else if (files.length > 2) {
-      impact = '🟡';
+      impact = 'MEDIUM';
       impactText = 'Medium';
     } else {
-      impact = '🟢';
+      impact = 'LOW';
       impactText = 'Low';
     }
     return `| ${category} | ${files.length} | ${impact} ${impactText} (${percentage}%) |`;
   })
   .join('\n')}
 
-### 🔍 Quick Navigation
+### Quick Navigation
 ${fileListings}
 `;
     
@@ -176,7 +176,8 @@ ${fileListings}
     });
     
     console.log('PR description updated with visual summary');
-    console.log(`Updated description with ${totalFiles} files across ${summaryParts.length} categories`);
+    const activeCategories = Object.entries(categories).filter(([_, files]) => files.length > 0);
+    console.log(`Updated description with ${totalFiles} files across ${activeCategories.length} categories`);
     
     return {
       success: true,
