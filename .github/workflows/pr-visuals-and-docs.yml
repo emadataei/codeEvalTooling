@@ -1,4 +1,4 @@
-name: Enhanced PR Visuals
+name: PR Visuals and Documentation
 
 on:
   pull_request:
@@ -13,7 +13,7 @@ permissions:
   pull-requests: write
 
 jobs:
-  generate-enhanced-visuals:
+  generate-pr-visuals-and-docs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     
@@ -50,6 +50,9 @@ jobs:
           
           # Install additional Python dependencies for visuals
           pip install matplotlib seaborn pandas pillow
+          
+          # Install Azure AI dependencies for smart documentation analysis
+          pip install azure-ai-inference azure-identity
 
       - name: Auto-detect project structure
         id: detect-structure
@@ -121,19 +124,34 @@ jobs:
           echo "📊 Generating enhanced visuals report with embedded images..."
           node .code-analysis/scripts/generate-embedded-visuals.js
 
+      - name: Generate documentation suggestions
+        run: |
+          echo "📝 Analyzing documentation needs..."
+          python .code-analysis/scripts/generate_documentation_suggestions.py
+        continue-on-error: true
+        env:
+          GITHUB_BASE_REF: ${{ github.base_ref }}
+          GITHUB_HEAD_REF: ${{ github.head_ref }}
+          # Azure AI Foundry configuration (optional - will fallback to rule-based if not set)
+          AI_FOUNDRY_ENDPOINT: ${{ secrets.AI_FOUNDRY_ENDPOINT }}
+          AI_FOUNDRY_TOKEN: ${{ secrets.AI_FOUNDRY_TOKEN }}
+          AI_FOUNDRY_MODEL: ${{ secrets.AI_FOUNDRY_MODEL || 'gpt-4o' }}
+
       - name: Upload all visual artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: enhanced-pr-visuals
+          name: pr-visuals-and-docs
           path: |
             .code-analysis/outputs/dependency_graph_base.png
             .code-analysis/outputs/dependency_graph_pr.png
             .code-analysis/outputs/change_heatmap.png
             .code-analysis/outputs/comprehensive_pr_report.md
             .code-analysis/outputs/enhanced_image_report.md
+            .code-analysis/outputs/documentation_suggestions.md
             .code-analysis/outputs/animated_summary.md
             .code-analysis/outputs/diff_stats.txt
             .code-analysis/outputs/enhanced_visuals_results.json
+            .code-analysis/outputs/documentation_analysis.json
             .code-analysis/outputs/*.svg
             .code-analysis/outputs/*.json
           retention-days: 30
@@ -144,37 +162,14 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const fs = require('fs');
-            const { createOrUpdateComment, getPRNumber } = require('./.code-analysis/scripts/pr-comment-utils');
-            
-            const prNumber = getPRNumber(context);
-            if (!prNumber) {
-              console.log('No PR number found, skipping comment');
-              return;
-            }
-            
-            // Load the enhanced image report with embedded visuals
-            let reportContent = '';
-            try {
-              reportContent = fs.readFileSync('.code-analysis/outputs/enhanced_image_report.md', 'utf8');
-              console.log('✅ Using enhanced image report with embedded visuals');
-            } catch (error) {
-              console.log('Could not read enhanced image report:', error.message);
-              // Fallback to comprehensive report if available
-              try {
-                reportContent = fs.readFileSync('.code-analysis/outputs/comprehensive_pr_report.md', 'utf8');
-                console.log('📋 Fallback to comprehensive report');
-              } catch (fallbackError) {
-                console.log('Could not read any report files:', fallbackError.message);
-                reportContent = '## 🎬 Enhanced PR Visuals\n\nAnalysis completed but reports not found. Some visual generation steps may have failed.\n\nCheck the [workflow artifacts](../actions/runs/${{ github.run_id }}) for generated files.';
-              }
-            }
-            
-            await createOrUpdateComment(
-              github, 
-              context, 
-              prNumber, 
-              reportContent,
-              '🎬 Enhanced PR Visuals',
-              'enhanced-pr-visuals'
-            );
+            const script = require('./.code-analysis/scripts/enhanced-visuals-pr-comment.js');
+            return await script({ github, context });
+
+      - name: Comment PR with documentation suggestions
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const script = require('./.code-analysis/scripts/documentation-suggestions-pr-comment.js');
+            return await script({ github, context });

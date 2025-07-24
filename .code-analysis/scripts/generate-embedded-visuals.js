@@ -26,34 +26,51 @@ async function convertImageToBase64(imagePath) {
 }
 
 /**
- * Generate multiple display options for an image (embedded + fallbacks)
+ * Generate display options for an image with base64 embedding
  */
 function generateImageDisplayOptions(imagePath, title, base64Data) {
   const fileName = path.basename(imagePath);
   let content = `### ${title}\n\n`;
   
   if (base64Data) {
-    // Option 1: Base64 embedded image (best compatibility)
+    // Base64 embedded image - displays directly in GitHub comments
     content += `<img src="${base64Data}" alt="${title}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px;" />\n\n`;
     
-    // Option 2: Provide fallback link in case base64 fails
+    // Provide technical details in a collapsible section
     content += `<details>\n`;
-    content += `<summary>📎 Alternative viewing options</summary>\n\n`;
-    content += `- **Direct file:** \`${fileName}\`\n`;
-    content += `- **Location:** \`.code-analysis/outputs/${fileName}\`\n`;
+    content += `<summary>Image Details</summary>\n\n`;
+    content += `- **File:** \`${fileName}\`\n`;
     content += `- **Size:** ${(Buffer.byteLength(base64Data.split(',')[1], 'base64') / 1024).toFixed(1)} KB\n`;
+    content += `- **Format:** ${getImageFormat(fileName)}\n`;
+    content += `- **Encoding:** Base64 embedded for instant viewing\n`;
     content += `\n</details>\n\n`;
   } else {
-    // No image available - provide helpful information
-    content += `> **📷 Image not yet generated:** \`${fileName}\`\n\n`;
-    content += `This visual will be available when:\n`;
-    content += `- Dependencies are properly installed (matplotlib, graphviz, etc.)\n`;
-    content += `- Analysis scripts complete successfully\n`;
-    content += `- Project structure is compatible with visual generation\n\n`;
-    content += `**Check:** \`.code-analysis/outputs/${fileName}\`\n\n`;
+    // No image available - provide helpful information without broken links
+    content += `> **Image not generated:** \`${fileName}\`\n\n`;
+    content += `**Why this might happen:**\n`;
+    content += `- Dependencies missing (matplotlib, seaborn, graphviz)\n`;
+    content += `- Analysis scripts encountered errors\n`;
+    content += `- No data available to visualize\n`;
+    content += `- Project structure not compatible with this visual type\n\n`;
+    content += `**To fix:** Check the workflow logs for specific error messages.\n\n`;
   }
   
   return content;
+}
+
+/**
+ * Get readable image format name
+ */
+function getImageFormat(fileName) {
+  const ext = path.extname(fileName).toLowerCase();
+  const formats = {
+    '.png': 'PNG (Portable Network Graphics)',
+    '.svg': 'SVG (Scalable Vector Graphics)', 
+    '.jpg': 'JPEG (Joint Photographic Experts Group)',
+    '.jpeg': 'JPEG (Joint Photographic Experts Group)',
+    '.gif': 'GIF (Graphics Interchange Format)'
+  };
+  return formats[ext] || 'Unknown format';
 }
 
 /**
@@ -63,34 +80,52 @@ async function generateEnhancedImageReport() {
   console.log('Generating enhanced image report with PNG displays...');
   
   const outputsDir = '.code-analysis/outputs';
+  const rootDir = '.';
+  
+  // Ensure outputs directory exists
+  if (!fs.existsSync(outputsDir)) {
+    fs.mkdirSync(outputsDir, { recursive: true });
+    console.log(`Created outputs directory: ${outputsDir}`);
+  }
+  
+  // Define images with their locations (check root first, then outputs)
   const images = {
-    'dependency_graph_base.png': '📊 Base Branch Dependencies',
-    'dependency_graph_pr.png': '📊 PR Branch Dependencies', 
-    'change_heatmap.png': '🔥 Change Impact Heatmap',
-    'development_flow.png': '🚀 Development Flow',
-    'story_arc.gif': '📖 Story Arc Animation'
+    'impact_heatmap.png': 'Change Impact Heatmap',
+    'development_flow.png': 'Development Flow',
+    'story_arc.gif': 'Story Arc Animation',
+    'dependency_graph_pr.png': 'PR Dependencies'
   };
   
-  // Also check for SVG alternatives since we created those
+  // Also check for SVG alternatives
   const svgAlternatives = {
-    'dependency_graph_base.svg': '📊 Base Branch Dependencies',
-    'dependency_graph_pr.svg': '📊 PR Branch Dependencies', 
-    'change_heatmap.svg': '🔥 Change Impact Heatmap',
-    'development_flow.svg': '🚀 Development Flow'
+    'dependency_graph_pr.svg': 'PR Dependencies', 
+    'development_flow.svg': 'Development Flow'
   };
   
-  let reportContent = '## 🎬 Enhanced PR Visuals\n\n';
-  reportContent += '*Displaying generated images with multiple rendering methods for best compatibility*\n\n';
+  let reportContent = '## Enhanced PR Visuals\n\n';
+  reportContent += '*Real-time analytics with embedded images for instant viewing*\n\n';
   
   let hasImages = false;
   let totalSize = 0;
+  
+  // Helper function to find image in multiple locations
+  function findImage(filename) {
+    const locations = [rootDir, outputsDir];
+    for (const location of locations) {
+      const imagePath = path.join(location, filename);
+      if (fs.existsSync(imagePath)) {
+        return imagePath;
+      }
+    }
+    return null;
+  }
   
   // Try PNG files first, then SVG alternatives
   const allImages = { ...images, ...svgAlternatives };
   
   for (const [filename, title] of Object.entries(allImages)) {
-    const imagePath = path.join(outputsDir, filename);
-    const base64Data = await convertImageToBase64(imagePath);
+    const imagePath = findImage(filename);
+    const base64Data = imagePath ? await convertImageToBase64(imagePath) : null;
     
     if (base64Data) {
       hasImages = true;
@@ -98,21 +133,26 @@ async function generateEnhancedImageReport() {
       totalSize += sizeKB;
       
       reportContent += generateImageDisplayOptions(imagePath, title, base64Data);
-      console.log(`✓ Embedded ${filename} (${sizeKB.toFixed(1)} KB)`);
+      console.log(`✓ Embedded ${filename} from ${path.dirname(imagePath)} (${sizeKB.toFixed(1)} KB)`);
     } else {
-      reportContent += generateImageDisplayOptions(imagePath, title, null);
+      reportContent += generateImageDisplayOptions(filename, title, null);
       console.log(`✗ Image not found: ${filename}`);
     }
     
     reportContent += '---\n\n';
   }
   
-  // Add summary
+  // Add summary section
   if (hasImages) {
-    reportContent += `### 📈 Summary\n\n`;
-    reportContent += `- **Images Embedded:** ${Object.entries(allImages).filter(([filename]) => fs.existsSync(path.join(outputsDir, filename))).length}\n`;
+    reportContent += `### Summary\n\n`;
+    reportContent += `- **Images Embedded:** ${Object.entries(allImages).filter(([filename]) => findImage(filename)).length}\n`;
     reportContent += `- **Total Size:** ${totalSize.toFixed(1)} KB\n`;
-    reportContent += `- **Rendering:** Base64 embedded for instant viewing\n\n`;
+    reportContent += `- **Rendering Method:** Base64 embedded for instant GitHub viewing\n`;
+    reportContent += `- **Compatibility:** Works in all GitHub markdown contexts\n\n`;
+    
+    if (totalSize > 500) {
+      reportContent += `> **Note:** Large total size (${totalSize.toFixed(1)} KB). Consider optimizing images if comments become slow to load.\n\n`;
+    }
   } else {
     reportContent += generateNoImagesMessage();
   }
@@ -138,20 +178,22 @@ async function generateEnhancedImageReport() {
 }
 
 function generateNoImagesMessage() {
-  return `### ❌ No Images Generated\n\n` +
-         `This can happen when:\n` +
-         `- **Dependencies Missing:** matplotlib, graphviz, or other required tools\n` +
-         `- **No Changes Detected:** Insufficient changes to generate meaningful visuals\n` +
-         `- **Project Type:** Some project structures aren't compatible with visual analysis\n` +
-         `- **Analysis Errors:** Check workflow logs for specific error messages\n\n` +
-         `**To fix this:**\n` +
-         `1. Ensure all dependencies are installed in the workflow\n` +
-         `2. Check that your project has analyzable dependencies\n` +
-         `3. Review the enhanced-pr-visuals workflow logs\n\n`;
+  return `### No Images Generated\n\n` +
+         `**Possible reasons:**\n` +
+         `- **Missing Dependencies:** matplotlib, seaborn, graphviz, or other visualization tools not installed\n` +
+         `- **No Analyzable Content:** Project structure doesn't contain dependency files or code changes\n` +
+         `- **Script Errors:** Analysis scripts encountered errors during execution\n` +
+         `- **Empty Changes:** No significant changes detected to visualize\n\n` +
+         `**To resolve:**\n` +
+         `1. Check the workflow logs for specific error messages\n` +
+         `2. Ensure all required dependencies are installed in the CI environment\n` +
+         `3. Verify your project has dependencies that can be analyzed (package.json, requirements.txt, etc.)\n` +
+         `4. Make sure there are actual code changes in the PR\n\n` +
+         `*Images will appear here automatically when analysis completes successfully.*\n\n`;
 }
 
 async function generateFileListingSection(outputsDir) {
-  let content = '### 📁 Generated Files\n\n';
+  let content = '### Generated Files\n\n';
   
   try {
     const files = fs.readdirSync(outputsDir);
@@ -165,7 +207,7 @@ async function generateFileListingSection(outputsDir) {
         const sizeKB = (stats.size / 1024).toFixed(1);
         const type = getFileType(file);
         const isImage = /\.(png|jpg|jpeg|gif|svg)$/i.test(file);
-        const status = isImage ? '🖼️ Image' : '📄 Data';
+        const status = isImage ? 'Image' : 'Data';
         content += `| \`${file}\` | ${sizeKB} KB | ${type} | ${status} |\n`;
       });
       
@@ -183,28 +225,28 @@ async function generateFileListingSection(outputsDir) {
 
 function getFileType(fileName) {
   const ext = path.extname(fileName).toLowerCase();
-  if (['.json'].includes(ext)) return '📊 Data';
-  if (['.md'].includes(ext)) return '📝 Report';
-  if (['.txt'].includes(ext)) return '📄 Text';
-  if (['.png', '.jpg', '.gif', '.svg'].includes(ext)) return '🖼️ Image';
-  return '📁 File';
+  if (['.json'].includes(ext)) return 'Data';
+  if (['.md'].includes(ext)) return 'Report';
+  if (['.txt'].includes(ext)) return 'Text';
+  if (['.png', '.jpg', '.gif', '.svg'].includes(ext)) return 'Image';
+  return 'File';
 }
 
 // Main execution
 async function main() {
   try {
     const result = await generateEnhancedImageReport();
-    console.log('\n✅ Enhanced image report generation complete!');
-    console.log(`📄 Report: ${result.reportPath}`);
-    console.log(`🖼️ Images: ${result.hasImages ? result.totalImages + ' embedded' : 'None found'}`);
-    console.log(`📊 Total size: ${result.totalSizeKB.toFixed(1)} KB`);
+    console.log('\nEnhanced image report generation complete!');
+    console.log(`Report: ${result.reportPath}`);
+    console.log(`Images: ${result.hasImages ? result.totalImages + ' embedded' : 'None found'}`);
+    console.log(`Total size: ${result.totalSizeKB.toFixed(1)} KB`);
     
     // Print a preview of the report content
     console.log('\n' + '='.repeat(80));
-    console.log('📋 REPORT PREVIEW (first 500 chars):');
+    console.log('REPORT PREVIEW (first 500 chars):');
     console.log('='.repeat(80));
     console.log(result.reportContent.substring(0, 500) + '...');
-    console.log('\n📄 Full report saved to: ' + result.reportPath);
+    console.log('\nFull report saved to: ' + result.reportPath);
   } catch (error) {
     console.error('Error generating enhanced image report:', error);
     process.exit(1);

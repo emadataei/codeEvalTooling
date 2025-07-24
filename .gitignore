@@ -65,3 +65,35 @@ historical-metrics.jsonl
 
 # Test files
 *.ps1
+
+# Virtual environments
+venv/
+venv312/
+venv313/
+env/
+ENV/
+.venv/
+.env/
+
+# Python local libraries
+Lib/
+/Scripts/
+Include/
+pyvenv.cfg
+
+# Code analysis outputs
+.code-analysis/outputs/
+
+# Local visual testing and sample files
+local-visual-test/
+
+# Generated images and visualizations
+*.png
+*.gif
+*.svg
+!**/assets/**/*.png
+!**/assets/**/*.gif
+!**/assets/**/*.svg
+!**/public/**/*.png
+!**/public/**/*.gif
+!**/public/**/*.svg
