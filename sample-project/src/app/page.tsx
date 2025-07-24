@@ -1,7 +1,14 @@
 'use client'
-// Updated demo page to showcase new user profile features
 import { useState } from 'react'
 import { UserProfile } from '../components/UserProfile'
+
+interface HealthStatus {
+  status: 'ok' | 'error';
+  timestamp: string;
+  version: string;
+  uptime: number;
+  environment: string;
+}
 
 interface UserCardProps {
   readonly userId?: string
@@ -15,21 +22,6 @@ function UserCard({ userId, title, variant = 'primary' }: UserCardProps) {
   // Use environment variable for API configuration
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api'
   
-  // Improved function with proper error handling
-  const fetchUserData = async (id: string) => {
-    try {
-      const response = await fetch(`${apiUrl}/users/${id}`)
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      const data = await response.json()
-      return data
-    } catch (error) {
-      console.error('Failed to fetch user data:', error)
-      throw error
-    }
-  }
-
   const handleSaveUser = async (formData: FormData) => {
     setIsLoading(true)
     try {
@@ -71,11 +63,82 @@ function UserCard({ userId, title, variant = 'primary' }: UserCardProps) {
 
 // Proper Next.js page component  
 export default function HomePage() {
+  const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null);
+  const [isLoadingHealth, setIsLoadingHealth] = useState(false);
+
+  const checkHealth = async () => {
+    setIsLoadingHealth(true);
+    try {
+      const response = await fetch('/api/health');
+      const data: HealthStatus = await response.json();
+      setHealthStatus(data);
+    } catch (error) {
+      console.error('Failed to fetch health status:', error);
+      setHealthStatus({
+        status: 'error',
+        timestamp: new Date().toISOString(),
+        version: 'unknown',
+        uptime: 0,
+        environment: 'unknown'
+      });
+    } finally {
+      setIsLoadingHealth(false);
+    }
+  };
+
+  const formatUptime = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    return `${hours}h ${minutes}m`;
+  };
+
   return (
     <main style={{padding: '2rem', minHeight: '100vh', backgroundColor: '#f0f0f0'}}>
-      <h1 style={{color: '#333', marginBottom: '2rem'}}>Enhanced User Profile Demo</h1>
+      <h1 style={{color: '#333', marginBottom: '2rem'}}>System Dashboard</h1>
+      
+      <div style={{marginBottom: '2rem', padding: '1rem', border: '1px solid #ddd', borderRadius: '8px', backgroundColor: 'white'}}>
+        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem'}}>
+          <h3>System Health Status</h3>
+          <button 
+            onClick={checkHealth}
+            disabled={isLoadingHealth}
+            style={{
+              padding: '0.5rem 1rem',
+              backgroundColor: '#007bff',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: isLoadingHealth ? 'not-allowed' : 'pointer',
+              opacity: isLoadingHealth ? 0.6 : 1
+            }}
+          >
+            {isLoadingHealth ? 'Checking...' : 'Check Health'}
+          </button>
+        </div>
+        
+        {healthStatus && (
+          <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem'}}>
+            <div>
+              <strong>Status:</strong> 
+              <span style={{
+                color: healthStatus.status === 'ok' ? 'green' : 'red',
+                marginLeft: '0.5rem'
+              }}>
+                {healthStatus.status.toUpperCase()}
+              </span>
+            </div>
+            <div><strong>Version:</strong> {healthStatus.version}</div>
+            <div><strong>Environment:</strong> {healthStatus.environment}</div>
+            <div><strong>Uptime:</strong> {formatUptime(healthStatus.uptime)}</div>
+            <div style={{gridColumn: '1 / -1'}}>
+              <strong>Last Check:</strong> {new Date(healthStatus.timestamp).toLocaleString()}
+            </div>
+          </div>
+        )}
+      </div>
+
       <p style={{color: '#666', marginBottom: '1rem'}}>
-        Updated sample application showcasing new user profile features with data loading.
+        Sample application with health monitoring and user profile features.
       </p>
       
       <UserCard 
