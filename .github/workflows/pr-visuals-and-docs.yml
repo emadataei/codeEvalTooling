@@ -1,6 +1,10 @@
 name: PR Visuals and Documentation
 
 on:
+  push:
+    branches:
+      - master
+      - main
   pull_request:
     types: [opened, synchronize, reopened]
     branches:
