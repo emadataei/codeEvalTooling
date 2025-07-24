@@ -12,7 +12,24 @@ async function postEnhancedVisualsComment({ github, context }) {
   let visualsContent = '';
   try {
     visualsContent = fs.readFileSync('.code-analysis/outputs/enhanced_image_report.md', 'utf8');
-    console.log('✅ Using enhanced image report with embedded visuals');
+    
+    // Check content size and truncate if necessary
+    const maxSize = 60000; // GitHub comment size limit is 65536, leave buffer
+    if (visualsContent.length > maxSize) {
+      console.log(`⚠️  Report too large (${visualsContent.length} chars), truncating to ${maxSize} chars`);
+      
+      // Find a good truncation point (end of a section)
+      let truncateAt = maxSize;
+      const lastSectionEnd = visualsContent.lastIndexOf('\n---\n', maxSize);
+      if (lastSectionEnd > maxSize * 0.8) { // Only use if within 80% of limit
+        truncateAt = lastSectionEnd + 5; // Include the "---\n\n"
+      }
+      
+      visualsContent = visualsContent.substring(0, truncateAt);
+      visualsContent += '\n\n> **Content truncated due to size limits.** Full report available in workflow artifacts.\n\n';
+    }
+    
+    console.log(`✅ Using enhanced image report (${visualsContent.length} characters)`);
   } catch (error) {
     console.log('Could not read enhanced image report:', error.message);
     // Fallback to comprehensive report if available
