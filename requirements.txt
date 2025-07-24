@@ -4,6 +4,7 @@ azure-identity
 PyGithub
 sonarqube-api
 pylint
+GitPython
 
 # Additional analysis dependencies
 requests

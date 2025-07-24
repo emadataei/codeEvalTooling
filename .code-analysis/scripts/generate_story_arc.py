@@ -4,13 +4,20 @@ Generate PR Review Summary for Enhanced PR Visuals
 Creates a simple, clear visual summary focused on what reviewers need to know
 """
 
-import matplotlib.pyplot as plt
-import numpy as np
-from PIL import Image
-import io
 import os
 import sys
 import json
+
+# Try to import visualization libraries, but don't fail if they're not available
+try:
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from PIL import Image
+    import io
+    VISUALIZATION_AVAILABLE = True
+except ImportError as e:
+    VISUALIZATION_AVAILABLE = False
+    print(f"Warning: Visualization libraries not available ({e}). Creating fallback.")
 
 class PRReviewSummaryGenerator:
     def __init__(self):
@@ -72,6 +79,11 @@ class PRReviewSummaryGenerator:
             
     def generate_frames(self):
         """Generate simple, clear frames for PR review summary"""
+        if not VISUALIZATION_AVAILABLE:
+            print("Visualization libraries not available, creating placeholder")
+            self.create_fallback_summary()
+            return []
+        
         frames = []
         data = self.load_analysis_data()
         
@@ -200,6 +212,43 @@ Thorough review recommended"""
         
         return frames
     
+    def create_fallback_summary(self):
+        """Create a text-based summary when visualization libraries aren't available"""
+        outputs_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'outputs')
+        
+        # Load basic data
+        data = self.load_analysis_data()
+        tier_name, _, tier_desc = self.get_tier_info(data['tier'])
+        
+        # Create a simple text summary file instead of GIF
+        summary_content = f"""# PR Review Summary
+
+## Quick Overview
+- **Files Changed:** {data['files_changed']}
+- **Complexity Score:** {data['complexity_score']}/100
+- **High-Risk Files:** {data['high_risk_files']}
+- **Review Assignment:** {tier_name}
+- **Description:** {tier_desc}
+
+## Review Action Required
+
+Based on the analysis, this PR requires **{tier_name}**.
+
+{tier_desc}
+
+---
+
+*Note: Visual animation not available due to missing dependencies. Install matplotlib, numpy, and Pillow for full visual experience.*
+"""
+        
+        # Save as markdown file
+        summary_path = os.path.join(outputs_dir, 'story_arc_summary.md')
+        with open(summary_path, 'w', encoding='utf-8') as f:
+            f.write(summary_content)
+        
+        print(f"Created fallback summary: {summary_path}")
+        return True
+    
     def create_gif(self, frames, output_path):
         """Create animated GIF from frames"""
         if not frames:
@@ -228,6 +277,13 @@ def main():
     
     generator = PRReviewSummaryGenerator()
     
+    if not VISUALIZATION_AVAILABLE:
+        print("Generating PR review summary (text fallback)...")
+        success = generator.create_fallback_summary()
+        if success:
+            print("PR review summary generated successfully (text format)")
+        return success
+    
     print("Generating PR review summary frames...")
     frames = generator.generate_frames()
     
@@ -238,11 +294,15 @@ def main():
         if generator.create_gif(frames, output_path):
             print(f"Successfully created PR review summary: {output_path}")
             print(f"Generated {len(frames)} clear, actionable frames")
+            return True
         else:
             print("Failed to create GIF")
+            return False
     else:
         print("No frames generated")
+        return False
 
 
 if __name__ == '__main__':
-    main()
+    success = main()
+    sys.exit(0 if success else 1)

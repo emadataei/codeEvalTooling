@@ -50,11 +50,14 @@ jobs:
           # Install global tools
           npm install -g madge
           
-          # Install additional Python dependencies for visuals
+          # Install additional Python dependencies for visuals (if not already in requirements.txt)
           pip install matplotlib seaborn pandas pillow numpy
           
           # Install graphviz Python bindings
           pip install graphviz
+          
+          # Install Git Python for documentation analysis
+          pip install GitPython
           
           # Install Azure AI dependencies for smart documentation analysis
           pip install azure-ai-inference azure-identity
@@ -62,13 +65,11 @@ jobs:
       - name: Auto-detect project structure
         id: detect-structure
         run: python .code-analysis/scripts/detect_project_structure.py
-        continue-on-error: true
         env:
           GITHUB_OUTPUT: ${{ runner.temp }}/github_output
 
       - name: Install project dependencies
         run: python .code-analysis/scripts/install_project_dependencies.py
-        continue-on-error: true
         env:
           PROJECT_DIR: ${{ steps.detect-structure.outputs.project_dir }}
           HAS_PACKAGE_JSON: ${{ steps.detect-structure.outputs.has_package_json }}
@@ -94,9 +95,13 @@ jobs:
           echo "Diff stats generated:"
           head -10 .code-analysis/outputs/diff_stats.txt
 
+      - name: Debug - List available scripts
+        run: |
+          echo "Listing all scripts in .code-analysis/scripts/"
+          ls -la .code-analysis/scripts/
+
       - name: Generate dependency graphs
         run: python .code-analysis/scripts/generate_dependency_graphs.py
-        continue-on-error: true
         env:
           GITHUB_BASE_REF: ${{ github.base_ref }}
           GITHUB_HEAD_REF: ${{ github.head_ref }}
@@ -105,24 +110,35 @@ jobs:
           PROJECT_TYPE: ${{ steps.detect-structure.outputs.project_type }}
 
       - name: Generate change heatmap
-        run: python .code-analysis/scripts/generate_change_heatmap.py
-        continue-on-error: true
+        run: |
+          echo "Checking if change heatmap script exists..."
+          ls -la .code-analysis/scripts/generate_change_heatmap.py || echo "File not found"
+          echo "Running change heatmap script..."
+          python .code-analysis/scripts/generate_change_heatmap.py
 
       - name: Generate impact heatmap
-        run: python .code-analysis/scripts/generate_impact_heatmap.py
-        continue-on-error: true
+        run: |
+          echo "Checking if impact heatmap script exists..."
+          ls -la .code-analysis/scripts/generate_impact_heatmap.py || echo "File not found"
+          echo "Running impact heatmap script..."
+          python .code-analysis/scripts/generate_impact_heatmap.py
 
       - name: Generate development flow
-        run: python .code-analysis/scripts/generate_development_flow.py
-        continue-on-error: true
+        run: |
+          echo "Checking if development flow script exists..."
+          ls -la .code-analysis/scripts/generate_development_flow.py || echo "File not found"
+          echo "Running development flow script..."
+          python .code-analysis/scripts/generate_development_flow.py
 
       - name: Generate story arc animation
-        run: python .code-analysis/scripts/generate_story_arc.py
-        continue-on-error: true
+        run: |
+          echo "Checking if story arc script exists..."
+          ls -la .code-analysis/scripts/generate_story_arc.py
+          echo "Running story arc script..."
+          python .code-analysis/scripts/generate_story_arc.py
 
       - name: Generate animated summary
         run: python .code-analysis/scripts/generate_animated_summary.py
-        continue-on-error: true
         env:
           PROJECT_DIR: ${{ steps.detect-structure.outputs.project_dir }}
           SOURCE_DIRS: ${{ steps.detect-structure.outputs.source_dirs }}
@@ -130,7 +146,6 @@ jobs:
 
       - name: Generate comprehensive report
         run: python .code-analysis/scripts/generate_comprehensive_report.py
-        continue-on-error: true
         env:
           PROJECT_DIR: ${{ steps.detect-structure.outputs.project_dir }}
           SOURCE_DIRS: ${{ steps.detect-structure.outputs.source_dirs }}
@@ -151,8 +166,7 @@ jobs:
       - name: Generate documentation suggestions
         run: |
           echo "Analyzing documentation needs..."
-          python .code-analysis/scripts/generate_documentation_suggestions.py
-        continue-on-error: true
+          python .code-analysis/scripts/generate_documentation_suggestions.py || python .code-analysis/scripts/generate_documentation_suggestions_fallback.py
         env:
           GITHUB_BASE_REF: ${{ github.base_ref }}
           GITHUB_HEAD_REF: ${{ github.head_ref }}

@@ -7,9 +7,17 @@ import os
 import sys
 import json
 from pathlib import Path
-import git
 import re
 from collections import defaultdict
+import subprocess
+
+# Try to import git, but don't fail if it's not available
+try:
+    import git
+    GIT_AVAILABLE = True
+except ImportError:
+    GIT_AVAILABLE = False
+    print("Warning: GitPython not available. Using fallback git commands.")
 
 # Add the parent directory to the path to access shared modules
 sys.path.append(str(Path(__file__).parent.parent / 'scoring'))
@@ -24,28 +32,60 @@ except ImportError:
 def load_changed_files():
     """Load the changed files from git diff"""
     try:
-        repo = git.Repo('.')
-        
+        if GIT_AVAILABLE:
+            # Use GitPython if available
+            repo = git.Repo('.')
+            
+            # Get base branch from environment or default to main
+            base_branch = os.getenv('GITHUB_BASE_REF', 'main')
+            head_branch = os.getenv('GITHUB_HEAD_REF', 'HEAD')
+            
+            # Get the diff
+            try:
+                base_commit = repo.commit(f'origin/{base_branch}')
+                head_commit = repo.commit(head_branch)
+                diff = base_commit.diff(head_commit)
+                
+                changed_files = []
+                for item in diff:
+                    if item.a_path:
+                        changed_files.append(item.a_path)
+                    if item.b_path and item.b_path not in changed_files:
+                        changed_files.append(item.b_path)
+                
+                return changed_files
+            except Exception:
+                # Fall back to subprocess if branch names are problematic
+                return load_changed_files_subprocess()
+        else:
+            # Use subprocess as fallback
+            return load_changed_files_subprocess()
+            
+    except Exception as e:
+        print(f"Warning: Could not load changed files from git: {e}")
+        return []
+
+def load_changed_files_subprocess():
+    """Load changed files using subprocess git commands"""
+    try:
         # Get base branch from environment or default to main
         base_branch = os.getenv('GITHUB_BASE_REF', 'main')
         
-        # Get changed files between base and current branch
-        changed_files = []
-        try:
-            # Get the diff
-            diff = repo.git.diff(f'origin/{base_branch}', '--name-only').split('\n')
-            changed_files = [f for f in diff if f.strip()]
-        except Exception as e:
-            print(f"Could not get git diff: {e}")
-            # Fallback to recent changes
-            changed_files = repo.git.diff('HEAD~1', '--name-only').split('\n')
-            changed_files = [f for f in changed_files if f.strip()]
+        # Use git diff to get changed files
+        result = subprocess.run(
+            ['git', 'diff', '--name-only', f'origin/{base_branch}'],
+            capture_output=True, text=True, timeout=30
+        )
         
-        print(f"Found {len(changed_files)} changed files")
-        return changed_files
-    
+        if result.returncode == 0:
+            changed_files = [f.strip() for f in result.stdout.split('\n') if f.strip()]
+            return changed_files
+        else:
+            print(f"Git diff command failed: {result.stderr}")
+            return []
+            
     except Exception as e:
-        print(f"Error loading changed files: {e}")
+        print(f"Warning: Subprocess git command failed: {e}")
         return []
 
 def analyze_project_structure():
