@@ -80,35 +80,50 @@ async function generateEnhancedImageReport() {
   console.log('Generating enhanced image report with PNG displays...');
   
   const outputsDir = '.code-analysis/outputs';
+  const rootDir = '.';
   
+  // Define images with their locations (check root first, then outputs)
   const images = {
+    'impact_heatmap.png': 'Change Impact Heatmap',
+    'development_flow.png': 'Development Flow',
+    'story_arc.gif': 'Story Arc Animation',
     'dependency_graph_base.png': 'Base Branch Dependencies',
     'dependency_graph_pr.png': 'PR Branch Dependencies', 
-    'change_heatmap.png': 'Change Impact Heatmap',
-    'development_flow.png': 'Development Flow',
-    'story_arc.gif': 'Story Arc Animation'
+    'change_heatmap.png': 'Change Heatmap Analysis'
   };
   
-  // Also check for SVG alternatives since we created those
+  // Also check for SVG alternatives
   const svgAlternatives = {
     'dependency_graph_base.svg': 'Base Branch Dependencies',
     'dependency_graph_pr.svg': 'PR Branch Dependencies', 
-    'change_heatmap.svg': 'Change Impact Heatmap',
+    'change_heatmap.svg': 'Change Heatmap Analysis',
     'development_flow.svg': 'Development Flow'
   };
   
   let reportContent = '## Enhanced PR Visuals\n\n';
-  reportContent += '*Images embedded using base64 encoding for instant viewing in GitHub comments*\n\n';
+  reportContent += '*Real-time analytics with embedded images for instant viewing*\n\n';
   
   let hasImages = false;
   let totalSize = 0;
+  
+  // Helper function to find image in multiple locations
+  function findImage(filename) {
+    const locations = [rootDir, outputsDir];
+    for (const location of locations) {
+      const imagePath = path.join(location, filename);
+      if (fs.existsSync(imagePath)) {
+        return imagePath;
+      }
+    }
+    return null;
+  }
   
   // Try PNG files first, then SVG alternatives
   const allImages = { ...images, ...svgAlternatives };
   
   for (const [filename, title] of Object.entries(allImages)) {
-    const imagePath = path.join(outputsDir, filename);
-    const base64Data = await convertImageToBase64(imagePath);
+    const imagePath = findImage(filename);
+    const base64Data = imagePath ? await convertImageToBase64(imagePath) : null;
     
     if (base64Data) {
       hasImages = true;
@@ -116,9 +131,9 @@ async function generateEnhancedImageReport() {
       totalSize += sizeKB;
       
       reportContent += generateImageDisplayOptions(imagePath, title, base64Data);
-      console.log(`✓ Embedded ${filename} (${sizeKB.toFixed(1)} KB)`);
+      console.log(`✓ Embedded ${filename} from ${path.dirname(imagePath)} (${sizeKB.toFixed(1)} KB)`);
     } else {
-      reportContent += generateImageDisplayOptions(imagePath, title, null);
+      reportContent += generateImageDisplayOptions(filename, title, null);
       console.log(`✗ Image not found: ${filename}`);
     }
     
@@ -128,7 +143,7 @@ async function generateEnhancedImageReport() {
   // Add summary section
   if (hasImages) {
     reportContent += `### Summary\n\n`;
-    reportContent += `- **Images Embedded:** ${Object.entries(allImages).filter(([filename]) => fs.existsSync(path.join(outputsDir, filename))).length}\n`;
+    reportContent += `- **Images Embedded:** ${Object.entries(allImages).filter(([filename]) => findImage(filename)).length}\n`;
     reportContent += `- **Total Size:** ${totalSize.toFixed(1)} KB\n`;
     reportContent += `- **Rendering Method:** Base64 embedded for instant GitHub viewing\n`;
     reportContent += `- **Compatibility:** Works in all GitHub markdown contexts\n\n`;
