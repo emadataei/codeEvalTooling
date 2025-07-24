@@ -35,8 +35,8 @@ function generateImageDisplayOptions(imagePath, title, base64Data, forceCompact 
   if (base64Data && !forceCompact) {
     const sizeKB = Buffer.byteLength(base64Data.split(',')[1], 'base64') / 1024;
     
-    // Only embed images smaller than 50KB to avoid comment size issues
-    if (sizeKB < 50) {
+    // Only embed images smaller than 30KB to avoid comment size issues
+    if (sizeKB < 30) {
       content += `<img src="${base64Data}" alt="${title}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px;" />\n\n`;
       content += `<details>\n<summary>Image Details</summary>\n\n`;
       content += `- **File:** \`${fileName}\`\n`;
@@ -131,7 +131,7 @@ async function generateEnhancedImageReport() {
   
   // Try PNG files first, then SVG alternatives
   const allImages = { ...images, ...svgAlternatives };
-  const MAX_COMMENT_SIZE = 60000; // Leave buffer below GitHub's 65536 limit
+  const MAX_COMMENT_SIZE = 55000; // Leave significant buffer below GitHub's 65536 limit
   let currentSize = reportContent.length;
   let forceCompact = false;
   
@@ -195,8 +195,13 @@ async function generateEnhancedImageReport() {
   if (hasImages) {
     const embeddedCount = forceCompact ? 0 : Object.entries(allImages).filter(([filename]) => {
       const imagePath = findImage(filename);
-      const base64Data = imagePath ? fs.readFileSync(imagePath) : null;
-      return base64Data && (base64Data.length / 1024) < 50;
+      if (!imagePath) return false;
+      try {
+        const imageBuffer = fs.readFileSync(imagePath);
+        return (imageBuffer.length / 1024) < 30; // Match the 30KB limit above
+      } catch {
+        return false;
+      }
     }).length;
     
     reportContent += `### Summary\n\n`;

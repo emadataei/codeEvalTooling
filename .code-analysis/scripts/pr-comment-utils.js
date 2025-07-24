@@ -50,14 +50,14 @@ async function createOrUpdateComment(github, context, prNumber, commentBody, ide
     console.log(`Creating/updating comment with identifier: "${identifier}"`);
     
     // Validate comment size before posting
-    const maxSize = 65000; // GitHub limit is 65536, leave small buffer
+    const maxSize = 63000; // GitHub limit is 65536, leave buffer for JSON encoding overhead
     if (commentBody.length > maxSize) {
       console.log(`⚠️  Comment too large (${commentBody.length} chars), truncating to ${maxSize} chars`);
       
       // Find a good truncation point
-      let truncateAt = maxSize - 200; // Leave room for truncation message
+      let truncateAt = maxSize - 300; // Leave room for truncation message
       const lastNewline = commentBody.lastIndexOf('\n', truncateAt);
-      if (lastNewline > truncateAt * 0.9) {
+      if (lastNewline > truncateAt * 0.8) {
         truncateAt = lastNewline;
       }
       
@@ -65,6 +65,7 @@ async function createOrUpdateComment(github, context, prNumber, commentBody, ide
       commentBody += '\n\n---\n**⚠️ Content truncated due to GitHub comment size limits.**\n\n';
       commentBody += 'Full content available in [workflow artifacts](https://github.com/';
       commentBody += `${context.repo.owner}/${context.repo.repo}/actions).`;
+      console.log(`✅ Comment truncated to ${commentBody.length} characters`);
     }
     
     // Get all comments on the PR
