@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { UserProfile } from '../components/UserProfile'
+import { UserSettings } from '../components/UserSettings'
 
 interface HealthStatus {
   status: 'ok' | 'error';
@@ -154,6 +155,16 @@ export default function HomePage() {
         />
       </div>
       
+      <div style={{marginTop: '2rem'}}>
+        <h2>User Settings</h2>
+        <UserSettings 
+          userId="demo-user-123"
+          onSettingsChange={(settings) => {
+            console.log('Settings updated:', settings);
+          }}
+        />
+      </div>
+      
       <div style={{marginTop: '2rem', padding: '1rem', border: '1px solid #ddd', borderRadius: '8px'}}>
         <h3>New Features Implemented:</h3>
         <ul>
@@ -162,6 +173,8 @@ export default function HomePage() {
           <li>Improved accessibility</li>
           <li>Better error handling</li>
           <li>Updated styling with animations</li>
+          <li>User settings management system</li>
+          <li>Real-time settings synchronization</li>
         </ul>
       </div>
     </main>
