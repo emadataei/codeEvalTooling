@@ -50,7 +50,7 @@ module.exports = async ({ github, context, changedFiles }) => {
     
     // Generate Mermaid diagram
     let mermaid = '```mermaid\ngraph TB\n';
-    mermaid += '    PR[📋 Pull Request Changes]\n';
+    mermaid += '    PR[Pull Request Changes]\n';
     
     let nodeId = 1;
     const hasCategories = Object.values(categories).some(files => files.length > 0);
@@ -115,7 +115,7 @@ module.exports = async ({ github, context, changedFiles }) => {
     });
 
     // Create comprehensive visual summary section
-    const visualSection = `## 🎯 PR Visual Summary
+    const visualSection = `## PR Visual Summary
 
 ### File Changes Overview
 
@@ -158,8 +158,10 @@ ${fileListings}
     let body = pr.body || '';
     
     // Remove existing visual overview/summary if present (handle both old and new formats)
-    body = body.replace(/## 🎯 PR Visual Summary[\s\S]*?(?=##|$)/g, '').trim();
-    body = body.replace(/## 📊 Visual Overview[\s\S]*?(?=##|$)/g, '').trim();
+    body = body.replace(/## 🎯 PR Visual Summary[\s\S]*?(?=\n##|\n$|$)/g, '').trim();
+    body = body.replace(/## PR Visual Summary[\s\S]*?(?=\n##|\n$|$)/g, '').trim();
+    body = body.replace(/## 📊 Visual Overview[\s\S]*?(?=\n##|\n$|$)/g, '').trim();
+    body = body.replace(/## File Changes Overview[\s\S]*?(?=\n##|\n$|$)/g, '').trim();
     
     // Add visual summary at the end of description
     if (body && !body.endsWith('\n\n')) {
@@ -199,10 +201,12 @@ ${fileListings}
       });
       
       let body = pr.body || '';
-      body = body.replace(/## 🎯 PR Visual Summary[\s\S]*?(?=##|$)/g, '').trim();
-      body = body.replace(/## 📊 Visual Overview[\s\S]*?(?=##|$)/g, '').trim();
+      body = body.replace(/## 🎯 PR Visual Summary[\s\S]*?(?=\n##|\n$|$)/g, '').trim();
+      body = body.replace(/## PR Visual Summary[\s\S]*?(?=\n##|\n$|$)/g, '').trim();
+      body = body.replace(/## 📊 Visual Overview[\s\S]*?(?=\n##|\n$|$)/g, '').trim();
+      body = body.replace(/## File Changes Overview[\s\S]*?(?=\n##|\n$|$)/g, '').trim();
       
-      const fallbackSection = `## 🎯 PR Visual Summary\n\n**Status:** Visual summary generation encountered an error. Please check the workflow logs for details.\n\n`;
+      const fallbackSection = `## PR Visual Summary\n\n**Status:** Visual summary generation encountered an error. Please check the workflow logs for details.\n\n`;
       
       if (body && !body.endsWith('\n\n')) {
         body += '\n\n';
