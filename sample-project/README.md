@@ -2,6 +2,24 @@
 
 This is a sample Next.js + TypeScript project designed to test the code quality gate system.
 
+## Features
+
+- **Health Monitoring**: Real-time system health dashboard with API endpoint
+- **User Management**: User profile components with form handling
+- **API Integration**: RESTful endpoints with proper error handling
+- **TypeScript Safety**: Comprehensive type definitions and interfaces
+
+## API Endpoints
+
+### Health Check
+- `GET /api/health` - Returns system status, uptime, and environment info
+- Response includes: status, timestamp, version, uptime, environment
+
+### User Management  
+- `GET /api/users` - List all users
+- `GET /api/users/[id]` - Get specific user details
+- `PUT /api/users/[id]` - Update user information
+
 ## Purpose
 
 This project contains intentional code quality issues to demonstrate:
