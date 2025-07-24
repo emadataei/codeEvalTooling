@@ -16,21 +16,36 @@ module.exports = async ({ github, context, changedFiles }) => {
       return;
     }
     
-    // Try to load enhanced visuals reports
+    // Try to load enhanced visuals reports - wait a bit for them to be generated
     let reportContent = '';
+    let attemptsLeft = 3;
+    let enhanced = false;
     
-    // First try enhanced image report
-    if (fs.existsSync('.code-analysis/outputs/enhanced_image_report.md')) {
-      reportContent = fs.readFileSync('.code-analysis/outputs/enhanced_image_report.md', 'utf8');
-      console.log('Using enhanced image report with embedded visuals');
+    while (attemptsLeft > 0 && !enhanced) {
+      // First try enhanced image report
+      if (fs.existsSync('.code-analysis/outputs/enhanced_image_report.md')) {
+        reportContent = fs.readFileSync('.code-analysis/outputs/enhanced_image_report.md', 'utf8');
+        console.log('Using enhanced image report with embedded visuals');
+        enhanced = true;
+      }
+      // Then try comprehensive report
+      else if (fs.existsSync('.code-analysis/outputs/comprehensive_pr_report.md')) {
+        reportContent = fs.readFileSync('.code-analysis/outputs/comprehensive_pr_report.md', 'utf8');
+        console.log('Using comprehensive report from enhanced visuals workflow');
+        enhanced = true;
+      }
+      else if (attemptsLeft > 1) {
+        console.log(`Enhanced visuals not ready, waiting 10 seconds... (${attemptsLeft - 1} attempts left)`);
+        await new Promise(resolve => setTimeout(resolve, 10000));
+        attemptsLeft--;
+      } else {
+        console.log('Enhanced visuals not available after waiting, skipping comment to avoid conflicts');
+        return { success: true, skipped: true, reason: 'Enhanced visuals workflow may be running' };
+      }
     }
-    // Then try comprehensive report
-    else if (fs.existsSync('.code-analysis/outputs/comprehensive_pr_report.md')) {
-      reportContent = fs.readFileSync('.code-analysis/outputs/comprehensive_pr_report.md', 'utf8');
-      console.log('Using comprehensive report from enhanced visuals workflow');
-    }
-    // Generate basic visual summary as fallback
-    else {
+    
+    // Only generate basic summary if no enhanced visuals are available and this isn't conflicting
+    if (!enhanced) {
       console.log('No enhanced visuals reports found, generating basic visual summary');
       
       const files = changedFiles || [];
