@@ -103,3 +103,7 @@ local-visual-test/
 !**/public/**/*.png
 !**/public/**/*.gif
 !**/public/**/*.svg
+
+# Generated base64 and embed files (for local testing and PR embedding)
+*_base64.txt
+*_embed.md
