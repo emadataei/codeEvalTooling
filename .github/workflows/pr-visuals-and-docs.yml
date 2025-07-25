@@ -113,6 +113,14 @@ jobs:
         run: |
           echo "Generating optimized PR impact heatmap..."
           python .code-analysis/scripts/generate_pr_impact_heatmap.py
+          echo "Checking if heatmap was generated..."
+          if [ -f ".code-analysis/outputs/pr_impact_heatmap.png" ]; then
+            echo "✅ Heatmap PNG found: $(ls -lh .code-analysis/outputs/pr_impact_heatmap.png)"
+          else  
+            echo "❌ Heatmap PNG not found"
+            echo "Contents of outputs directory:"
+            ls -la .code-analysis/outputs/ || echo "Outputs directory not found"
+          fi
 
       - name: Generate development flow
         run: |
@@ -210,6 +218,24 @@ jobs:
           script: |
             const script = require('./.code-analysis/scripts/cleanup-old-visual-comments.js');
             return await script({ github, context });
+
+      - name: Debug - List generated files
+        if: always() && github.event_name == 'pull_request'
+        run: |
+          echo "=== Checking for generated visual files ==="
+          ls -la .code-analysis/outputs/ || echo "Outputs directory not found"
+          echo ""
+          echo "=== Looking for embed files specifically ==="
+          find . -name "*_embed.md" -type f || echo "No embed files found"
+          echo ""
+          echo "=== Looking for base64 files ==="
+          find . -name "*_base64.txt" -type f || echo "No base64 files found"
+          echo ""
+          echo "=== Current working directory ==="
+          pwd
+          echo ""
+          echo "=== Full directory structure ==="
+          find .code-analysis -type f | head -20
 
       - name: Comment PR with separate visual posts
         if: always() && github.event_name == 'pull_request'
