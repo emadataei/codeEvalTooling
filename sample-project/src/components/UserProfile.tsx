@@ -32,7 +32,7 @@ export function UserProfile({ title, onSave, variant = 'primary', userId }: User
   const [isEditing, setIsEditing] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
-  // Load user data if userId is provided
+  // Load user data when userId is provided
   useEffect(() => {
     if (userId) {
       const loadUserData = async () => {
