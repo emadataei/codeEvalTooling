@@ -97,7 +97,46 @@ def save_image_with_base64(output_file, plt_figure=None, dpi=100):
     """Save image to file and generate base64 encoded version for PR embedding"""
     
     if plt_figure:
-        # Save to file
+        # First save to check raw file size
+        temp_buffer = BytesIO()
+        plt_figure.savefig(
+            temp_buffer,
+            format='png',
+            dpi=dpi,
+            bbox_inches='tight',
+            facecolor='white',
+            edgecolor='none'
+        )
+        temp_buffer.seek(0)
+        raw_size = len(temp_buffer.getvalue())
+        temp_buffer.close()
+        
+        # If too large, reduce DPI and try again
+        max_raw_size = 45 * 1024  # 45KB raw = ~60KB base64 (under 64KB GitHub limit)
+        if raw_size > max_raw_size:
+            print(f"Image too large ({raw_size/1024:.1f}KB), reducing DPI from {dpi} to 60")
+            dpi = 60
+            
+            # Try again with lower DPI
+            temp_buffer = BytesIO()
+            plt_figure.savefig(
+                temp_buffer,
+                format='png',
+                dpi=dpi,
+                bbox_inches='tight',
+                facecolor='white',
+                edgecolor='none'
+            )
+            temp_buffer.seek(0)
+            raw_size = len(temp_buffer.getvalue())
+            temp_buffer.close()
+            
+            # If still too large, reduce further
+            if raw_size > max_raw_size:
+                print(f"Still too large ({raw_size/1024:.1f}KB), reducing DPI to 40")
+                dpi = 40
+        
+        # Save to file with final DPI
         plt_figure.savefig(
             output_file, 
             dpi=dpi,
@@ -106,7 +145,7 @@ def save_image_with_base64(output_file, plt_figure=None, dpi=100):
             edgecolor='none'
         )
         
-        # Generate base64 version
+        # Generate base64 version with same settings
         buffer = BytesIO()
         plt_figure.savefig(
             buffer,
@@ -120,11 +159,32 @@ def save_image_with_base64(output_file, plt_figure=None, dpi=100):
         
         # Encode to base64
         image_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+        base64_with_prefix = f"data:image/png;base64,{image_base64}"
+        
+        # Check final size
+        final_size = len(base64_with_prefix)
+        github_limit = 64 * 1024  # 64KB
+        
+        if final_size > github_limit:
+            print(f"Warning: Base64 size ({final_size/1024:.1f}KB) exceeds GitHub limit ({github_limit/1024}KB)")
+            # Create a placeholder instead
+            placeholder_content = "Image too large for GitHub comment display. Available in workflow artifacts."
+            base64_file = str(output_file).replace('.png', '_base64.txt')
+            with open(base64_file, 'w') as f:
+                f.write(placeholder_content)
+            
+            markdown_file = str(output_file).replace('.png', '_embed.md')
+            with open(markdown_file, 'w') as f:
+                f.write(f"{placeholder_content}\n")
+            
+            buffer.close()
+            plt.close()
+            return 0
         
         # Save base64 version for easy PR embedding
         base64_file = str(output_file).replace('.png', '_base64.txt')
         with open(base64_file, 'w') as f:
-            f.write(f"data:image/png;base64,{image_base64}")
+            f.write(base64_with_prefix)
         
         # Also save markdown-ready version
         markdown_file = str(output_file).replace('.png', '_embed.md')
@@ -134,6 +194,7 @@ def save_image_with_base64(output_file, plt_figure=None, dpi=100):
         buffer.close()
         plt.close()
         
+        print(f"Generated base64 image: {final_size/1024:.1f}KB (DPI: {dpi})")
         return len(image_base64)
     
     return 0

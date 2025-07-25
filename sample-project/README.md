@@ -13,13 +13,15 @@ This is a sample Next.js + TypeScript project designed to test the code quality 
 ## API Endpoints
 
 ### Health Check
-- `GET /api/health` - Returns system status, uptime, and environment info
-- Response includes: status, timestamp, version, uptime, environment
+- `GET /api/health` - Returns comprehensive system status
+- Response includes: status, timestamp, version, uptime, environment, memory usage, service status
+- Enhanced monitoring with memory statistics and service health checks
 
 ### User Management  
-- `GET /api/users` - List all users
-- `GET /api/users/[id]` - Get specific user details
-- `PUT /api/users/[id]` - Update user information
+- `GET /api/users` - List all users with pagination
+- `GET /api/users/[id]` - Get specific user details with preferences
+- `PUT /api/users/[id]` - Update user information and settings
+- New: User preferences support (theme, notifications, language)
 
 ## Purpose
 

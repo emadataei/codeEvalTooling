@@ -17,6 +17,14 @@ interface UserData {
   avatar?: string
   phone?: string
   location?: string
+  lastLogin?: Date
+  preferences?: UserPreferences
+}
+
+interface UserPreferences {
+  theme: 'light' | 'dark' | 'auto'
+  notifications: boolean
+  language: string
 }
 
 /**
