@@ -1,4 +1,5 @@
 // This component follows the Copilot instructions correctly
+// Updated to test PR visual generation workflow
 import { useState, useEffect } from 'react'
 
 interface UserProfileProps {
@@ -6,6 +7,7 @@ interface UserProfileProps {
   readonly onSave: (data: FormData) => void
   readonly variant?: 'primary' | 'secondary'
   readonly userId?: string
+  readonly isEditable?: boolean
 }
 
 interface UserData {

@@ -1,13 +1,14 @@
 # Sample Next.js Project
 
-This is a sample Next.js + TypeScript project designed to test the code quality gate system.
+This is a sample Next.js + TypeScript project designed to test the code quality gate system and PR visual generation workflow.
 
 ## Features
 
 - **Health Monitoring**: Real-time system health dashboard with API endpoint
-- **User Management**: User profile components with form handling
+- **User Management**: User profile components with form handling and edit capabilities
 - **API Integration**: RESTful endpoints with proper error handling
 - **TypeScript Safety**: Comprehensive type definitions and interfaces
+- **PR Visuals**: Automated generation of impact heatmaps and development flow charts
 
 ## API Endpoints
 
