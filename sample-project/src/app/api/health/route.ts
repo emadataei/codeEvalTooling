@@ -14,7 +14,9 @@ interface HealthCheckResponse {
   services: {
     database: 'ok' | 'error';
     cache: 'ok' | 'error';
+    api: 'ok' | 'error';
   };
+  requestId: string;
 }
 
 export async function GET() {
@@ -35,8 +37,10 @@ export async function GET() {
       },
       services: {
         database: 'ok',
-        cache: 'ok'
-      }
+        cache: 'ok',
+        api: 'ok'
+      },
+      requestId: `req_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
     };
 
     return NextResponse.json(healthData);
@@ -56,8 +60,10 @@ export async function GET() {
       },
       services: {
         database: 'error',
-        cache: 'error'
-      }
+        cache: 'error',
+        api: 'error'
+      },
+      requestId: `req_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
     };
 
     return NextResponse.json(errorResponse, { status: 500 });

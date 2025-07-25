@@ -1,5 +1,5 @@
 // This component follows the Copilot instructions correctly
-// Updated to test PR visual generation workflow
+// Updated to test PR visual generation workflow with enhanced validation
 import { useState, useEffect } from 'react'
 
 interface UserProfileProps {
@@ -8,6 +8,7 @@ interface UserProfileProps {
   readonly variant?: 'primary' | 'secondary'
   readonly userId?: string
   readonly isEditable?: boolean
+  readonly showAvatarUpload?: boolean
 }
 
 interface UserData {
@@ -19,6 +20,7 @@ interface UserData {
   location?: string
   lastLogin?: Date
   preferences?: UserPreferences
+  isVerified?: boolean
 }
 
 interface UserPreferences {

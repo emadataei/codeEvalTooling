@@ -11,6 +11,7 @@ interface HealthStatus {
   version: string;
   uptime: number;
   environment: string;
+  requestId: string;
 }
 
 interface UserCardProps {
@@ -82,7 +83,8 @@ export default function HomePage() {
         timestamp: new Date().toISOString(),
         version: 'unknown',
         uptime: 0,
-        environment: 'unknown'
+        environment: 'unknown',
+        requestId: 'error'
       });
     } finally {
       setIsLoadingHealth(false);
