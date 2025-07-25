@@ -35,13 +35,16 @@ function generateImageDisplayOptions(imagePath, title, base64Data, forceCompact 
   if (base64Data && !forceCompact) {
     const sizeKB = Buffer.byteLength(base64Data.split(',')[1], 'base64') / 1024;
     
-    // Only embed images smaller than 30KB to avoid comment size issues
-    if (sizeKB < 30) {
-      content += `<img src="${base64Data}" alt="${title}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px;" />\n\n`;
-      content += `<details>\n<summary>Image Details</summary>\n\n`;
+    // Embed images up to 100KB to ensure they show in PR comments
+    if (sizeKB < 100) {
+      content += `<div align="center">\n\n`;
+      content += `<img src="${base64Data}" alt="${title}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" />\n\n`;
+      content += `</div>\n\n`;
+      content += `<details>\n<summary>📊 Image Details</summary>\n\n`;
       content += `- **File:** \`${fileName}\`\n`;
       content += `- **Size:** ${sizeKB.toFixed(1)} KB\n`;
       content += `- **Format:** ${getImageFormat(fileName)}\n`;
+      content += `- **Status:** ✅ Embedded for instant viewing\n`;
       content += `\n</details>\n\n`;
     } else {
       // Large image - provide compact reference
@@ -51,7 +54,8 @@ function generateImageDisplayOptions(imagePath, title, base64Data, forceCompact 
   } else if (base64Data && forceCompact) {
     // Compact mode - just reference the image
     const sizeKB = Buffer.byteLength(base64Data.split(',')[1], 'base64') / 1024;
-    content += `> **Image Generated:** \`${fileName}\` (${sizeKB.toFixed(1)} KB) - Available in artifacts\n\n`;
+    content += `> **📊 Large Image Generated:** \`${fileName}\` (${sizeKB.toFixed(1)} KB)\n\n`;
+    content += `> Image is too large for inline display but available in workflow artifacts.\n\n`;
   } else {
     // No image available
     content += `> **Image not generated:** \`${fileName}\`\n\n`;
@@ -105,12 +109,6 @@ async function generateEnhancedImageReport() {
     'dependency_graph_pr.png': 'PR Dependencies'
   };
   
-  // Also check for SVG alternatives
-  const svgAlternatives = {
-    'dependency_graph_pr.svg': 'PR Dependencies', 
-    'development_flow.svg': 'Development Flow'
-  };
-  
   let reportContent = '## Enhanced PR Visuals\n\n';
   reportContent += '*Real-time analytics with embedded images for instant viewing*\n\n';
   
@@ -129,9 +127,9 @@ async function generateEnhancedImageReport() {
     return null;
   }
   
-  // Try PNG files first, then SVG alternatives
-  const allImages = { ...images, ...svgAlternatives };
-  const MAX_COMMENT_SIZE = 55000; // Leave significant buffer below GitHub's 65536 limit
+  // Process the main images
+  const allImages = images;
+  const MAX_COMMENT_SIZE = 58000; // Conservative limit for GitHub comments with base64 images
   let currentSize = reportContent.length;
   let forceCompact = false;
   
@@ -145,7 +143,6 @@ async function generateEnhancedImageReport() {
     imageData.push({ filename, title, imagePath, base64Data });
     
     if (base64Data) {
-      const sizeKB = Buffer.byteLength(base64Data.split(',')[1], 'base64') / 1024;
       // Estimate content size (base64 + markup)
       estimatedSize += base64Data.length + 500; // markup overhead
     }
@@ -191,43 +188,12 @@ async function generateEnhancedImageReport() {
     currentSize += 7; // "---\n\n"
   }
   
-  // Add summary section
-  if (hasImages) {
-    const embeddedCount = forceCompact ? 0 : Object.entries(allImages).filter(([filename]) => {
-      const imagePath = findImage(filename);
-      if (!imagePath) return false;
-      try {
-        const imageBuffer = fs.readFileSync(imagePath);
-        return (imageBuffer.length / 1024) < 30; // Match the 30KB limit above
-      } catch {
-        return false;
-      }
-    }).length;
-    
-    reportContent += `### Summary\n\n`;
-    reportContent += `- **Images Generated:** ${Object.entries(allImages).filter(([filename]) => findImage(filename)).length}\n`;
-    reportContent += `- **Images Embedded:** ${embeddedCount}\n`;
-    reportContent += `- **Total Size:** ${totalSize.toFixed(1)} KB\n`;
-    reportContent += `- **Comment Size:** ${(currentSize / 1024).toFixed(1)} KB\n`;
-    if (forceCompact) {
-      reportContent += `- **Mode:** Compact (large content detected)\n`;
-    }
-    reportContent += `- **Timestamp:** ${new Date().toISOString()}\n\n`;
-    reportContent += `*All images are available in the workflow artifacts for download.*\n\n`;
-    reportContent += `- **Rendering Method:** Base64 embedded for instant GitHub viewing\n`;
-    reportContent += `- **Compatibility:** Works in all GitHub markdown contexts\n\n`;
-    
-    if (totalSize > 500) {
-      reportContent += `> **Note:** Large total size (${totalSize.toFixed(1)} KB). Consider optimizing images if comments become slow to load.\n\n`;
-    }
-  } else {
+  // Add message if no images were generated
+  if (!hasImages) {
     reportContent += generateNoImagesMessage();
   }
   
-  // Add file listing
-  reportContent += await generateFileListingSection(outputsDir);
-  
-  // Save the report
+  // Save the report (removed useless file listing and summary)
   const reportPath = path.join(outputsDir, 'enhanced_image_report.md');
   fs.writeFileSync(reportPath, reportContent, 'utf8');
   
@@ -257,37 +223,6 @@ function generateNoImagesMessage() {
          `3. Verify your project has dependencies that can be analyzed (package.json, requirements.txt, etc.)\n` +
          `4. Make sure there are actual code changes in the PR\n\n` +
          `*Images will appear here automatically when analysis completes successfully.*\n\n`;
-}
-
-async function generateFileListingSection(outputsDir) {
-  let content = '### Generated Files\n\n';
-  
-  try {
-    const files = fs.readdirSync(outputsDir);
-    if (files.length > 0) {
-      content += '| File | Size | Type | Status |\n';
-      content += '|------|------|------|--------|\n';
-      
-      files.forEach(file => {
-        const fullPath = path.join(outputsDir, file);
-        const stats = fs.statSync(fullPath);
-        const sizeKB = (stats.size / 1024).toFixed(1);
-        const type = getFileType(file);
-        const isImage = /\.(png|jpg|jpeg|gif|svg)$/i.test(file);
-        const status = isImage ? 'Image' : 'Data';
-        content += `| \`${file}\` | ${sizeKB} KB | ${type} | ${status} |\n`;
-      });
-      
-      content += '\n';
-    } else {
-      content += '*No files generated in outputs directory.*\n\n';
-    }
-  } catch (error) {
-    console.log('Could not read outputs directory:', error.message);
-    content += '*Could not read outputs directory.*\n\n';
-  }
-  
-  return content;
 }
 
 function getFileType(fileName) {

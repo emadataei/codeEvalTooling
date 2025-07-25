@@ -85,7 +85,7 @@ Check the [workflow artifacts](https://github.com/${context.repo.owner}/${contex
     prNumber, 
     visualsContent,
     'Enhanced PR Visuals',
-    'enhanced-pr-visuals'
+    'enhanced-pr-visuals-v2'  // Use unique ID to ensure comment replacement works
   );
 }
 

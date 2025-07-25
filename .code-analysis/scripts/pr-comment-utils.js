@@ -93,7 +93,13 @@ async function createOrUpdateComment(github, context, prNumber, commentBody, ide
       existingComment = comments.find(comment => 
         comment.body.includes(identifier) || 
         comment.body.startsWith(`## ${identifier}`) ||
-        comment.body.includes(`# ${identifier}`)
+        comment.body.includes(`# ${identifier}`) ||
+        // Also check for "Enhanced PR Visuals" in various formats
+        (identifier === 'Enhanced PR Visuals' && (
+          comment.body.includes('Enhanced PR Visuals') ||
+          comment.body.includes('## Enhanced PR Visuals') ||
+          comment.body.includes('# Enhanced PR Visuals')
+        ))
       );
       if (existingComment) {
         console.log(`Found existing comment by identifier: "${identifier}"`);
