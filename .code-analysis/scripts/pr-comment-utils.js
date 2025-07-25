@@ -90,26 +90,50 @@ async function createOrUpdateComment(github, context, prNumber, commentBody, ide
     
     // Fallback to identifier matching if no comment ID match found
     if (!existingComment) {
-      existingComment = comments.find(comment => 
-        comment.body.includes(identifier) || 
-        comment.body.startsWith(`## ${identifier}`) ||
-        comment.body.includes(`# ${identifier}`) ||
-        // Also check for "Enhanced PR Visuals" in various formats
-        (identifier === 'Enhanced PR Visuals' && (
-          comment.body.includes('Enhanced PR Visuals') ||
-          comment.body.includes('## Enhanced PR Visuals') ||
-          comment.body.includes('# Enhanced PR Visuals')
-        ))
-      );
+      existingComment = comments.find(comment => {
+        // Check for exact identifier match in comment body or as a marker
+        if (comment.body.includes(`<!-- identifier: ${identifier} -->`)) {
+          return true;
+        }
+        
+        // For visual comments, match by title
+        if (identifier.startsWith('pr-visual-')) {
+          const visualType = identifier.replace('pr-visual-', '');
+          if (visualType === 'pr-impact-heatmap' && comment.body.includes('## PR Impact Heatmap')) {
+            return true;
+          }
+          if (visualType === 'development-flow' && comment.body.includes('## Development Flow')) {
+            return true;
+          }
+          if (visualType === 'story-arc' && comment.body.includes('## Story Arc')) {
+            return true;
+          }
+        }
+        
+        // Legacy matching for backward compatibility
+        return comment.body.includes(identifier) || 
+               comment.body.startsWith(`## ${identifier}`) ||
+               comment.body.includes(`# ${identifier}`) ||
+               // Also check for "Enhanced PR Visuals" in various formats
+               (identifier === 'Enhanced PR Visuals' && (
+                 comment.body.includes('Enhanced PR Visuals') ||
+                 comment.body.includes('## Enhanced PR Visuals') ||
+                 comment.body.includes('# Enhanced PR Visuals')
+               ));
+      });
+      
       if (existingComment) {
         console.log(`Found existing comment by identifier: "${identifier}"`);
       }
     }
 
     // Add comment ID if provided (for GitHub Actions workflow tracking)
-    const finalCommentBody = commentId ? 
+    let finalCommentBody = commentId ? 
       `${commentBody}\n\n<!-- comment-id: ${commentId} -->` : 
       commentBody;
+      
+    // Add identifier marker for reliable future matching
+    finalCommentBody += `\n<!-- identifier: ${identifier} -->`;
 
     if (existingComment) {
       console.log(`Updating existing comment (ID: ${existingComment.id})`);
