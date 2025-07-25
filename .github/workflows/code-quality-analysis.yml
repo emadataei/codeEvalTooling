@@ -136,6 +136,15 @@ jobs:
             const script = require('./.code-analysis/scripts/dependency-graph-pr-comment.js');
             return await script({ github, context });
 
+      - name: Auto-label PR based on quality analysis
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const script = require('./.code-analysis/scripts/auto-label-pr.js');
+            return await script({ github, context });
+
       - name: Check for generated artifacts
         id: check-artifacts
         run: |
