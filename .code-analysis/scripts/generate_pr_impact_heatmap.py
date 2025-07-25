@@ -202,22 +202,28 @@ def save_image_with_base64(output_file, plt_figure=None, dpi=100):
 
 def get_output_file_path():
     """Get the correct output file path based on current working directory"""
-    possible_paths = [
-        Path('../outputs/pr_impact_heatmap.png'),  # When run from scripts directory
-        Path('.code-analysis/outputs/pr_impact_heatmap.png'),  # When run from project root
-        Path('outputs/pr_impact_heatmap.png'),  # When run from .code-analysis directory
-    ]
+    import os
+    current_dir = os.getcwd()
+    print(f"Current working directory: {current_dir}")
     
-    # Use the first path whose parent directory exists or can be created
-    for path in possible_paths:
-        try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            return str(path)
-        except OSError:
-            continue
+    # Always use absolute path to ensure consistency
+    if '.code-analysis/scripts' in current_dir:
+        # Running from scripts directory - go up one level to .code-analysis
+        output_path = Path(current_dir).parent / 'outputs' / 'pr_impact_heatmap.png'
+    elif current_dir.endswith('.code-analysis'):
+        # Running from .code-analysis directory
+        output_path = Path(current_dir) / 'outputs' / 'pr_impact_heatmap.png'
+    else:
+        # Running from project root
+        output_path = Path(current_dir) / '.code-analysis' / 'outputs' / 'pr_impact_heatmap.png'
     
-    # Fallback
-    return '../outputs/pr_impact_heatmap.png'
+    # Ensure directory exists
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    print(f"Output path resolved to: {output_path}")
+    print(f"Output directory exists: {output_path.parent.exists()}")
+    
+    return str(output_path)
 
 
 def generate_optimized_heatmap():
