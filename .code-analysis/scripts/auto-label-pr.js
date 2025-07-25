@@ -2,7 +2,8 @@ const fs = require('fs');
 const { getPRNumber, loadResults, setLabels } = require('./pr-comment-utils');
 
 /**
- * Automatically set PR labels based on analysis results
+ * Automatically set reviewer-centric PR labels based on analysis results
+ * Focus: tier, complexity, score, size, merge readiness (not code categories)
  */
 async function autoLabelPR({ github, context }) {
   const prNumber = getPRNumber(context);
@@ -11,374 +12,356 @@ async function autoLabelPR({ github, context }) {
     return;
   }
 
-  console.log(`Setting automatic labels for PR #${prNumber}`);
+  console.log(`Setting reviewer-centric labels for PR #${prNumber}`);
   
   const labels = new Set();
   
-  // Collect labels from different analysis sources
-  await addIntentLabels(labels);
-  await addRiskLabels(labels);
-  await addQualityLabels(labels);
-  await addSizeLabels(labels, github, context, prNumber);
-  await addTechnologyLabels(labels, github, context, prNumber);
-  addVisualLabels(labels);
-  addDocumentationLabels(labels);
+  try {
+    // Get PR statistics for analysis
+    const prStats = await getPRStats(github, context, prNumber);
+    const changedFiles = await getChangedFiles(github, context, prNumber);
+    
+    // Apply reviewer-centric labeling
+    addTierLabel(labels, prStats, changedFiles);
+    addComplexityLabel(labels, prStats, changedFiles);
+    addQualityScoreLabel(labels);
+    addSizeLabel(labels, prStats);
+    addMergeReadinessLabel(labels, prStats, changedFiles);
 
-  // Apply labels
-  const finalLabels = Array.from(labels).filter(label => label && label.trim());
+    // Apply labels
+    const finalLabels = Array.from(labels).filter(label => label && label.trim());
+    
+    if (finalLabels.length > 0) {
+      console.log(`Setting reviewer-centric labels: ${finalLabels.join(', ')}`);
+      await setLabels(github, context, prNumber, finalLabels);
+      console.log('Labels set successfully');
+    } else {
+      console.log('No labels to set');
+    }
+
+    return finalLabels;
+  } catch (error) {
+    console.error('Error in auto-labeling:', error);
+    return [];
+  }
+}
+
+/**
+ * Add tier label (who should review)
+ */
+function addTierLabel(labels, prStats, changedFiles) {
+  let tierScore = 0;
   
-  if (finalLabels.length > 0) {
-    console.log(`Setting labels: ${finalLabels.join(', ')}`);
-    await setLabels(github, context, prNumber, finalLabels);
-    console.log('✅ Labels set successfully');
+  // Size factor (0-2 points)
+  const totalChanges = prStats.additions + prStats.deletions;
+  if (totalChanges > 1000) tierScore += 2;
+  else if (totalChanges > 500) tierScore += 1;
+  
+  // Risk factor based on file types (0-2 points)
+  const riskScore = calculateRiskScore(changedFiles);
+  tierScore += Math.min(riskScore, 2);
+  
+  // Critical files factor (0-2 points)
+  const hasCriticalFiles = changedFiles.some(file => 
+    file.includes('package.json') || 
+    file.includes('dockerfile') ||
+    file.includes('.github/workflows') ||
+    file.includes('tsconfig.json') ||
+    file.includes('next.config')
+  );
+  if (hasCriticalFiles) tierScore += 1;
+  
+  // Architecture files
+  const hasArchitectureFiles = changedFiles.some(file =>
+    file.includes('/api/') ||
+    file.includes('/lib/') ||
+    file.includes('/utils/') ||
+    file.includes('types.ts') ||
+    file.includes('schema')
+  );
+  if (hasArchitectureFiles) tierScore += 1;
+  
+  // Determine tier
+  if (tierScore === 0 && totalChanges < 50) {
+    labels.add('tier:0');
+  } else if (tierScore <= 1) {
+    labels.add('tier:1');
+  } else if (tierScore <= 2) {
+    labels.add('tier:2');
+  } else if (tierScore <= 3) {
+    labels.add('tier:3');
   } else {
-    console.log('No labels to set');
-  }
-
-  return finalLabels;
-}
-
-/**
- * Add intent-based labels
- */
-async function addIntentLabels(labels) {
-  try {
-    // Check multiple possible locations for intent results
-    const locations = [
-      '.code-analysis/outputs/intent-classification-results.json',
-      'intent_classification.json'
-    ];
-    
-    let intentResults = null;
-    for (const location of locations) {
-      try {
-        intentResults = loadResults(location);
-        if (intentResults.primary_intent) break;
-      } catch (locationError) {
-        console.log(`Could not load from ${location}:`, locationError.message);
-      }
-    }
-    
-    if (intentResults && intentResults.primary_intent) {
-      const intentLabel = getIntentLabel(intentResults.primary_intent);
-      if (intentLabel) labels.add(intentLabel);
-      
-      // Add confidence indicator
-      if (intentResults.confidence > 0.8) {
-        labels.add('high-confidence');
-      } else if (intentResults.confidence < 0.5) {
-        labels.add('needs-review');
-      }
-    }
-  } catch (error) {
-    console.log('Intent classification results not available:', error.message);
+    labels.add('tier:4');
   }
 }
 
 /**
- * Add risk-based labels
+ * Add complexity label (mental effort required)
  */
-async function addRiskLabels(labels) {
-  try {
-    // Check multiple possible locations for risk results
-    const locations = [
-      '.code-analysis/outputs/impact-prediction-results.json',
-      'impact_prediction.json'
-    ];
-    
-    let impactResults = null;
-    for (const location of locations) {
-      try {
-        impactResults = loadResults(location);
-        if (impactResults.overall_risk_score !== undefined) break;
-      } catch (locationError) {
-        console.log(`Could not load from ${location}:`, locationError.message);
-      }
-    }
-    
-    if (impactResults && impactResults.overall_risk_score !== undefined) {
-      const riskLabel = getRiskLabel(impactResults.overall_risk_score);
-      if (riskLabel) labels.add(riskLabel);
-    }
-  } catch (error) {
-    console.log('Impact prediction results not available:', error.message);
+function addComplexityLabel(labels, prStats, changedFiles) {
+  let complexityScore = 0;
+  
+  const totalChanges = prStats.additions + prStats.deletions;
+  
+  // Size complexity
+  if (totalChanges > 1000) complexityScore += 3;
+  else if (totalChanges > 500) complexityScore += 2;
+  else if (totalChanges > 200) complexityScore += 1;
+  
+  // File type complexity
+  const hasComplexFiles = changedFiles.some(file => {
+    const ext = file.split('.').pop()?.toLowerCase();
+    return ['ts', 'tsx', 'js', 'jsx'].includes(ext) && 
+           !file.includes('test') && 
+           !file.includes('.spec.');
+  });
+  if (hasComplexFiles) complexityScore += 1;
+  
+  // Multiple file types (integration complexity)
+  const fileTypes = new Set();
+  changedFiles.forEach(file => {
+    const ext = file.split('.').pop()?.toLowerCase();
+    if (ext) fileTypes.add(ext);
+  });
+  if (fileTypes.size > 3) complexityScore += 1;
+  
+  // Documentation-only changes are trivial
+  const onlyDocs = changedFiles.every(file => 
+    file.endsWith('.md') || 
+    file.includes('docs/') ||
+    file.includes('README')
+  );
+  if (onlyDocs) complexityScore = 0;
+  
+  // Assign complexity label
+  if (complexityScore === 0) {
+    labels.add('complexity:trivial');
+  } else if (complexityScore === 1) {
+    labels.add('complexity:low');
+  } else if (complexityScore === 2) {
+    labels.add('complexity:medium');
+  } else if (complexityScore === 3) {
+    labels.add('complexity:high');
+  } else {
+    labels.add('complexity:critical');
   }
 }
 
 /**
- * Add quality gate labels
+ * Add quality score label (readiness for review)
  */
-async function addQualityLabels(labels) {
+function addQualityScoreLabel(labels) {
   try {
+    // Check for quality gate results
     const qualityResults = findQualityResults();
-    if (!qualityResults) return;
     
-    addQualityScoreLabels(labels, qualityResults);
-    addQualityIssueLabels(labels, qualityResults);
+    if (qualityResults && typeof qualityResults.overall_score === 'number') {
+      const score = qualityResults.overall_score;
+      
+      if (score >= 8.0) {
+        labels.add('score:excellent');
+      } else if (score >= 6.0) {
+        labels.add('score:good');
+      } else if (score >= 4.0) {
+        labels.add('score:needs-work');
+      } else {
+        labels.add('score:incomplete');
+      }
+    } else {
+      // Default to needs-review if no quality data
+      labels.add('score:good');
+    }
   } catch (error) {
-    console.log('Quality gate results not available:', error.message);
+    console.log('Quality assessment not available, defaulting to good');
+    labels.add('score:good');
   }
 }
 
 /**
- * Find quality results from multiple locations
+ * Add size label (review time planning)
+ */
+function addSizeLabel(labels, prStats) {
+  const totalChanges = prStats.additions + prStats.deletions;
+  
+  if (totalChanges < 50) {
+    labels.add('size:XS');
+  } else if (totalChanges < 200) {
+    labels.add('size:S');
+  } else if (totalChanges < 500) {
+    labels.add('size:M');
+  } else if (totalChanges < 1000) {
+    labels.add('size:L');
+  } else {
+    labels.add('size:XL');
+  }
+}
+
+/**
+ * Add merge readiness label (review routing)
+ */
+function addMergeReadinessLabel(labels, prStats, changedFiles) {
+  const totalChanges = prStats.additions + prStats.deletions;
+  
+  // Auto-merge candidates
+  const isDocumentationOnly = changedFiles.every(file => 
+    file.endsWith('.md') || 
+    file.includes('docs/') ||
+    file.includes('README')
+  );
+  
+  const isSmallConfigChange = totalChanges < 50 && changedFiles.every(file =>
+    file.endsWith('.json') ||
+    file.endsWith('.yml') ||
+    file.endsWith('.yaml') ||
+    file.endsWith('.md')
+  );
+  
+  if ((isDocumentationOnly || isSmallConfigChange) && totalChanges < 50) {
+    labels.add('auto-merge-candidate');
+    return;
+  }
+  
+  // Expert review needed
+  const needsExpertReview = changedFiles.some(file =>
+    file.includes('security') ||
+    file.includes('auth') ||
+    file.includes('database') ||
+    file.includes('migration') ||
+    file.includes('.github/workflows') ||
+    file.includes('dockerfile') ||
+    totalChanges > 1000
+  );
+  
+  if (needsExpertReview) {
+    labels.add('needs-expert-review');
+    return;
+  }
+  
+  // Team discussion needed
+  const needsTeamDiscussion = 
+    totalChanges > 2000 ||
+    changedFiles.some(file => 
+      file.includes('package.json') && file.includes('"version"') ||
+      file.includes('BREAKING') ||
+      file.includes('major')
+    );
+  
+  if (needsTeamDiscussion) {
+    labels.add('hold-for-discussion');
+    return;
+  }
+  
+  // Default to standard review
+  labels.add('needs-review');
+}
+
+/**
+ * Calculate risk score based on file types and patterns
+ */
+function calculateRiskScore(files) {
+  let risk = 0;
+  
+  files.forEach(file => {
+    const lowerFile = file.toLowerCase();
+    
+    // High risk files
+    if (lowerFile.includes('security') || 
+        lowerFile.includes('auth') ||
+        lowerFile.includes('password') ||
+        lowerFile.includes('token')) {
+      risk += 0.5;
+    }
+    
+    // Database and data files
+    if (lowerFile.includes('database') ||
+        lowerFile.includes('migration') ||
+        lowerFile.includes('schema')) {
+      risk += 0.3;
+    }
+    
+    // Infrastructure files
+    if (lowerFile.includes('dockerfile') ||
+        lowerFile.includes('docker-compose') ||
+        lowerFile.includes('.github/workflows')) {
+      risk += 0.3;
+    }
+    
+    // Configuration files
+    if (lowerFile.includes('config') ||
+        lowerFile.includes('package.json') ||
+        lowerFile.includes('tsconfig')) {
+      risk += 0.2;
+    }
+  });
+  
+  return Math.min(risk, 2); // Cap at 2 points
+}
+
+/**
+ * Find quality results from multiple possible locations
  */
 function findQualityResults() {
   const locations = [
     '.code-analysis/outputs/quality-gate-results.json',
-    'quality-gate-results.json'
+    'quality-gate-results.json',
+    '.code-analysis/outputs/sonar-results.json'
   ];
   
   for (const location of locations) {
     try {
-      const results = loadResults(location);
-      if (results.overall_score !== undefined) return results;
-    } catch (locationError) {
-      console.log(`Could not load from ${location}:`, locationError.message);
+      if (fs.existsSync(location)) {
+        const content = fs.readFileSync(location, 'utf8');
+        const results = JSON.parse(content);
+        if (results && typeof results.overall_score === 'number') {
+          return results;
+        }
+      }
+    } catch (error) {
+      console.log(`Could not load quality results from ${location}: ${error.message}`);
     }
   }
+  
   return null;
-}
-
-/**
- * Add quality score labels
- */
-function addQualityScoreLabels(labels, qualityResults) {
-  if (qualityResults.overall_score === undefined) return;
-  
-  if (qualityResults.overall_score >= 8) {
-    labels.add('✅ high-quality');
-  } else if (qualityResults.overall_score >= 6) {
-    labels.add('🟡 needs-improvement');
-  } else {
-    labels.add('🔴 quality-issues');
-  }
-}
-
-/**
- * Add quality issue labels
- */
-function addQualityIssueLabels(labels, qualityResults) {
-  if (!qualityResults.issues || qualityResults.issues.length === 0) return;
-  
-  const hasSecurityIssues = qualityResults.issues.some(issue => 
-    issue.type && issue.type.toLowerCase().includes('security')
-  );
-  if (hasSecurityIssues) {
-    labels.add('🔒 security-review');
-  }
-  
-  const hasPerformanceIssues = qualityResults.issues.some(issue => 
-    issue.type && issue.type.toLowerCase().includes('performance')
-  );
-  if (hasPerformanceIssues) {
-    labels.add('⚡ performance-review');
-  }
-}
-
-/**
- * Add size-based labels
- */
-async function addSizeLabels(labels, github, context, prNumber) {
-  try {
-    const prStats = await getPRStats(github, context, prNumber);
-    const sizeLabel = getSizeLabel(prStats);
-    if (sizeLabel) labels.add(sizeLabel);
-  } catch (error) {
-    console.log('Could not get PR stats for size labeling:', error.message);
-  }
-}
-
-/**
- * Add technology-based labels
- */
-async function addTechnologyLabels(labels, github, context, prNumber) {
-  try {
-    const changedFiles = await getChangedFiles(github, context, prNumber);
-    const techLabels = getTechnologyLabels(changedFiles);
-    techLabels.forEach(label => labels.add(label));
-  } catch (error) {
-    console.log('Could not get changed files for technology labeling:', error.message);
-  }
-}
-
-/**
- * Add visual analysis labels
- */
-function addVisualLabels(labels) {
-  try {
-    const hasVisuals = checkForGeneratedVisuals();
-    if (hasVisuals.length > 0) {
-      labels.add('📊-visuals-generated');
-      
-      // Specific visual types
-      if (hasVisuals.includes('impact_heatmap.png')) labels.add('impact-analysis');
-      if (hasVisuals.includes('dependency_graph_pr.png')) labels.add('dependency-changes');
-      if (hasVisuals.includes('story_arc.gif')) labels.add('animated-summary');
-    }
-  } catch (error) {
-    console.log('Could not check for generated visuals:', error.message);
-  }
-}
-
-/**
- * Add documentation labels
- */
-function addDocumentationLabels(labels) {
-  try {
-    const docsContent = fs.readFileSync('.code-analysis/outputs/documentation_suggestions.md', 'utf8');
-    if (docsContent.includes('Missing documentation') || docsContent.includes('documentation gaps')) {
-      labels.add('docs-needed');
-    }
-    if (docsContent.includes('Well documented') || docsContent.includes('comprehensive')) {
-      labels.add('well-documented');
-    }
-  } catch (error) {
-    console.log('Documentation analysis not available:', error.message);
-  }
-}
-
-/**
- * Map intent to label
- */
-function getIntentLabel(intent) {
-  const labelMap = {
-    'feature': '✨ feature',
-    'bug': '🐛 bug',
-    'bugfix': '🐛 bug',
-    'refactor': '♻️ refactor',
-    'documentation': '📚 documentation',
-    'ui': '🎨 ui',
-    'api': '🔧 api',
-    'infrastructure': '🏗️ infrastructure',
-    'infra': '🏗️ infrastructure',
-    'test': '🧪 test',
-    'testing': '🧪 test',
-    'security': '🔒 security',
-    'performance': '⚡ performance',
-    'maintenance': '🔧 maintenance',
-    'style': '💄 style',
-    'config': '⚙️ config',
-    'build': '🏗️ build'
-  };
-  
-  return labelMap[intent.toLowerCase()];
-}
-
-/**
- * Map risk score to label
- */
-function getRiskLabel(riskScore) {
-  if (riskScore < 0.2) return '🟢 low-risk';
-  if (riskScore < 0.5) return '🟡 medium-risk';
-  if (riskScore < 0.8) return '🟠 high-risk';
-  return '🔴 critical-risk';
-}
-
-/**
- * Get PR size label based on stats
- */
-function getSizeLabel(stats) {
-  const totalChanges = stats.additions + stats.deletions;
-  
-  if (totalChanges < 50) return 'size/XS';
-  if (totalChanges < 200) return 'size/S';
-  if (totalChanges < 500) return 'size/M';
-  if (totalChanges < 1000) return 'size/L';
-  return 'size/XL';
-}
-
-/**
- * Get technology labels based on file extensions
- */
-function getTechnologyLabels(files) {
-  const labels = new Set();
-  
-  files.forEach(file => {
-    const ext = file.split('.').pop().toLowerCase();
-    const path = file.toLowerCase();
-    
-    // Frontend
-    if (['tsx', 'jsx'].includes(ext)) labels.add('react');
-    if (['vue'].includes(ext)) labels.add('vue');
-    if (['js', 'ts'].includes(ext) && (path.includes('frontend') || path.includes('client'))) {
-      labels.add('frontend');
-    }
-    
-    // Backend
-    if (['py'].includes(ext)) labels.add('python');
-    if (['js', 'ts'].includes(ext) && (path.includes('api') || path.includes('server'))) {
-      labels.add('backend');
-    }
-    
-    // Infrastructure
-    if (['yml', 'yaml'].includes(ext) && path.includes('.github')) labels.add('ci/cd');
-    if (['dockerfile', 'docker-compose'].some(d => path.includes(d))) labels.add('docker');
-    
-    // Documentation
-    if (['md'].includes(ext)) labels.add('documentation');
-    
-    // Configuration
-    if (['json', 'yaml', 'yml', 'toml', 'ini'].includes(ext)) labels.add('config');
-  });
-  
-  return Array.from(labels);
 }
 
 /**
  * Get PR statistics
  */
 async function getPRStats(github, context, prNumber) {
-  const { data: pr } = await github.rest.pulls.get({
-    owner: context.repo.owner,
-    repo: context.repo.repo,
-    pull_number: prNumber
-  });
-  
-  return {
-    additions: pr.additions,
-    deletions: pr.deletions,
-    changedFiles: pr.changed_files
-  };
+  try {
+    const { data: pr } = await github.rest.pulls.get({
+      owner: context.repo.owner,
+      repo: context.repo.repo,
+      pull_number: prNumber
+    });
+    
+    return {
+      additions: pr.additions || 0,
+      deletions: pr.deletions || 0,
+      changedFiles: pr.changed_files || 0
+    };
+  } catch (error) {
+    console.error('Error getting PR stats:', error);
+    return { additions: 0, deletions: 0, changedFiles: 0 };
+  }
 }
 
 /**
  * Get list of changed files
  */
 async function getChangedFiles(github, context, prNumber) {
-  const { data: files } = await github.rest.pulls.listFiles({
-    owner: context.repo.owner,
-    repo: context.repo.repo,
-    pull_number: prNumber
-  });
-  
-  return files.map(file => file.filename);
-}
-
-/**
- * Check what visual files were generated
- */
-function checkForGeneratedVisuals() {
-  const visualFiles = [
-    'change_heatmap.png',
-    'impact_heatmap.png', 
-    'development_flow.png',
-    'story_arc.gif',
-    'dependency_graph_pr.png'
-  ];
-  
-  const outputsDir = '.code-analysis/outputs';
-  const rootDir = '.';
-  
-  const foundVisuals = [];
-  
-  visualFiles.forEach(file => {
-    if (fs.existsSync(`${outputsDir}/${file}`) || fs.existsSync(`${rootDir}/${file}`)) {
-      foundVisuals.push(file);
-    }
-  });
-  
-  return foundVisuals;
+  try {
+    const { data: files } = await github.rest.pulls.listFiles({
+      owner: context.repo.owner,
+      repo: context.repo.repo,
+      pull_number: prNumber
+    });
+    
+    return files.map(file => file.filename);
+  } catch (error) {
+    console.error('Error getting changed files:', error);
+    return [];
+  }
 }
 
 module.exports = autoLabelPR;
