@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { UserProfile } from '../components/UserProfile'
 import { UserSettings } from '../components/UserSettings'
 import { UserActivityLog } from '../components/UserActivityLog'
+import { AnalyticsDashboard } from '../components/AnalyticsDashboard'
 
 interface HealthStatus {
   status: 'ok' | 'error';
@@ -170,6 +171,11 @@ export default function HomePage() {
         <h2>User Activity Log</h2>
         <UserActivityLog userId="demo-user-123" />
       </div>
+
+      <div style={{marginTop: '2rem', padding: '1rem', border: '1px solid #ddd', borderRadius: '8px'}}>
+        <h2>Analytics Dashboard</h2>
+        <AnalyticsDashboard userId="550e8400-e29b-41d4-a716-446655440000" />
+      </div>
       
       <div style={{marginTop: '2rem', padding: '1rem', border: '1px solid #ddd', borderRadius: '8px'}}>
         <h3>New Features Implemented:</h3>
@@ -183,6 +189,8 @@ export default function HomePage() {
           <li>Real-time settings synchronization</li>
           <li>User activity tracking and logging</li>
           <li>Activity filtering and pagination</li>
+          <li>Comprehensive analytics dashboard with metrics tracking</li>
+          <li>Analytics API with validation and mock data</li>
         </ul>
       </div>
     </main>

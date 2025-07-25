@@ -26,26 +26,34 @@ async function convertImageToBase64(imagePath) {
 }
 
 /**
- * Generate display options for an image with base64 embedding
+ * Generate display options for an image with size-aware embedding
  */
-function generateImageDisplayOptions(imagePath, title, base64Data) {
+function generateImageDisplayOptions(imagePath, title, base64Data, forceCompact = false) {
   const fileName = path.basename(imagePath);
   let content = `### ${title}\n\n`;
   
-  if (base64Data) {
-    // Base64 embedded image - displays directly in GitHub comments
-    content += `<img src="${base64Data}" alt="${title}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px;" />\n\n`;
+  if (base64Data && !forceCompact) {
+    const sizeKB = Buffer.byteLength(base64Data.split(',')[1], 'base64') / 1024;
     
-    // Provide technical details in a collapsible section
-    content += `<details>\n`;
-    content += `<summary>Image Details</summary>\n\n`;
-    content += `- **File:** \`${fileName}\`\n`;
-    content += `- **Size:** ${(Buffer.byteLength(base64Data.split(',')[1], 'base64') / 1024).toFixed(1)} KB\n`;
-    content += `- **Format:** ${getImageFormat(fileName)}\n`;
-    content += `- **Encoding:** Base64 embedded for instant viewing\n`;
-    content += `\n</details>\n\n`;
+    // Only embed images smaller than 30KB to avoid comment size issues
+    if (sizeKB < 30) {
+      content += `<img src="${base64Data}" alt="${title}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px;" />\n\n`;
+      content += `<details>\n<summary>Image Details</summary>\n\n`;
+      content += `- **File:** \`${fileName}\`\n`;
+      content += `- **Size:** ${sizeKB.toFixed(1)} KB\n`;
+      content += `- **Format:** ${getImageFormat(fileName)}\n`;
+      content += `\n</details>\n\n`;
+    } else {
+      // Large image - provide compact reference
+      content += `> **Large Image Available:** \`${fileName}\` (${sizeKB.toFixed(1)} KB)\n\n`;
+      content += `Image too large for inline display. Available in workflow artifacts.\n\n`;
+    }
+  } else if (base64Data && forceCompact) {
+    // Compact mode - just reference the image
+    const sizeKB = Buffer.byteLength(base64Data.split(',')[1], 'base64') / 1024;
+    content += `> **Image Generated:** \`${fileName}\` (${sizeKB.toFixed(1)} KB) - Available in artifacts\n\n`;
   } else {
-    // No image available - provide helpful information without broken links
+    // No image available
     content += `> **Image not generated:** \`${fileName}\`\n\n`;
     content += `**Why this might happen:**\n`;
     content += `- Dependencies missing (matplotlib, seaborn, graphviz)\n`;
@@ -123,31 +131,89 @@ async function generateEnhancedImageReport() {
   
   // Try PNG files first, then SVG alternatives
   const allImages = { ...images, ...svgAlternatives };
+  const MAX_COMMENT_SIZE = 55000; // Leave significant buffer below GitHub's 65536 limit
+  let currentSize = reportContent.length;
+  let forceCompact = false;
+  
+  // First pass: calculate total content size to determine if we need compact mode
+  let estimatedSize = currentSize;
+  const imageData = [];
   
   for (const [filename, title] of Object.entries(allImages)) {
     const imagePath = findImage(filename);
     const base64Data = imagePath ? await convertImageToBase64(imagePath) : null;
+    imageData.push({ filename, title, imagePath, base64Data });
     
+    if (base64Data) {
+      const sizeKB = Buffer.byteLength(base64Data.split(',')[1], 'base64') / 1024;
+      // Estimate content size (base64 + markup)
+      estimatedSize += base64Data.length + 500; // markup overhead
+    }
+  }
+  
+  // Switch to compact mode if estimated size is too large
+  if (estimatedSize > MAX_COMMENT_SIZE) {
+    forceCompact = true;
+    console.log(`⚠️  Large content detected (${(estimatedSize/1024).toFixed(1)}KB), using compact mode`);
+  }
+  
+  // Second pass: generate content with appropriate mode
+  for (const { filename, title, imagePath, base64Data } of imageData) {
     if (base64Data) {
       hasImages = true;
       const sizeKB = Buffer.byteLength(base64Data.split(',')[1], 'base64') / 1024;
       totalSize += sizeKB;
       
-      reportContent += generateImageDisplayOptions(imagePath, title, base64Data);
-      console.log(`✓ Embedded ${filename} from ${path.dirname(imagePath)} (${sizeKB.toFixed(1)} KB)`);
+      const imageContent = generateImageDisplayOptions(imagePath, title, base64Data, forceCompact);
+      
+      // Check if adding this content would exceed the limit
+      if (currentSize + imageContent.length > MAX_COMMENT_SIZE) {
+        forceCompact = true;
+        console.log(`⚠️  Switching to compact mode due to size limit`);
+        // Regenerate in compact mode
+        const compactContent = generateImageDisplayOptions(imagePath, title, base64Data, true);
+        reportContent += compactContent;
+        currentSize += compactContent.length;
+      } else {
+        reportContent += imageContent;
+        currentSize += imageContent.length;
+      }
+      
+      console.log(`✓ ${forceCompact ? 'Referenced' : 'Embedded'} ${filename} (${sizeKB.toFixed(1)} KB)`);
     } else {
-      reportContent += generateImageDisplayOptions(filename, title, null);
+      const noImageContent = generateImageDisplayOptions(filename, title, null, forceCompact);
+      reportContent += noImageContent;
+      currentSize += noImageContent.length;
       console.log(`✗ Image not found: ${filename}`);
     }
     
     reportContent += '---\n\n';
+    currentSize += 7; // "---\n\n"
   }
   
   // Add summary section
   if (hasImages) {
+    const embeddedCount = forceCompact ? 0 : Object.entries(allImages).filter(([filename]) => {
+      const imagePath = findImage(filename);
+      if (!imagePath) return false;
+      try {
+        const imageBuffer = fs.readFileSync(imagePath);
+        return (imageBuffer.length / 1024) < 30; // Match the 30KB limit above
+      } catch {
+        return false;
+      }
+    }).length;
+    
     reportContent += `### Summary\n\n`;
-    reportContent += `- **Images Embedded:** ${Object.entries(allImages).filter(([filename]) => findImage(filename)).length}\n`;
+    reportContent += `- **Images Generated:** ${Object.entries(allImages).filter(([filename]) => findImage(filename)).length}\n`;
+    reportContent += `- **Images Embedded:** ${embeddedCount}\n`;
     reportContent += `- **Total Size:** ${totalSize.toFixed(1)} KB\n`;
+    reportContent += `- **Comment Size:** ${(currentSize / 1024).toFixed(1)} KB\n`;
+    if (forceCompact) {
+      reportContent += `- **Mode:** Compact (large content detected)\n`;
+    }
+    reportContent += `- **Timestamp:** ${new Date().toISOString()}\n\n`;
+    reportContent += `*All images are available in the workflow artifacts for download.*\n\n`;
     reportContent += `- **Rendering Method:** Base64 embedded for instant GitHub viewing\n`;
     reportContent += `- **Compatibility:** Works in all GitHub markdown contexts\n\n`;
     

@@ -156,6 +156,17 @@ jobs:
           echo "Generating enhanced visuals report with embedded images..."
           if [ -f ".code-analysis/scripts/generate-embedded-visuals.js" ]; then
             node .code-analysis/scripts/generate-embedded-visuals.js
+            
+            # Validate report size
+            if [ -f ".code-analysis/outputs/enhanced_image_report.md" ]; then
+              REPORT_SIZE=$(wc -c < .code-analysis/outputs/enhanced_image_report.md)
+              echo "Report size: $REPORT_SIZE characters"
+              if [ "$REPORT_SIZE" -gt 60000 ]; then
+                echo "⚠️  Warning: Report size ($REPORT_SIZE chars) is near GitHub comment limit (65536 chars)"
+              else
+                echo "✅ Report size is within safe limits"
+              fi
+            fi
           else
             echo "Enhanced visuals script not found"
             mkdir -p .code-analysis/outputs
