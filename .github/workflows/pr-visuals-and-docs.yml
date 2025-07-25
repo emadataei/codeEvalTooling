@@ -109,19 +109,10 @@ jobs:
           SOURCE_DIRS: ${{ steps.detect-structure.outputs.source_dirs }}
           PROJECT_TYPE: ${{ steps.detect-structure.outputs.project_type }}
 
-      - name: Generate change heatmap
+      - name: Generate PR impact heatmap
         run: |
-          echo "Checking if change heatmap script exists..."
-          ls -la .code-analysis/scripts/generate_change_heatmap.py || echo "File not found"
-          echo "Running change heatmap script..."
-          python .code-analysis/scripts/generate_change_heatmap.py
-
-      - name: Generate impact heatmap
-        run: |
-          echo "Checking if impact heatmap script exists..."
-          ls -la .code-analysis/scripts/generate_impact_heatmap.py || echo "File not found"
-          echo "Running impact heatmap script..."
-          python .code-analysis/scripts/generate_impact_heatmap.py
+          echo "Generating optimized PR impact heatmap..."
+          python .code-analysis/scripts/generate_pr_impact_heatmap.py
 
       - name: Generate development flow
         run: |
@@ -194,10 +185,9 @@ jobs:
           path: |
             .code-analysis/outputs/dependency_graph_base.png
             .code-analysis/outputs/dependency_graph_pr.png
-            .code-analysis/outputs/change_heatmap.png
-            .code-analysis/outputs/impact_heatmap.png
+            .code-analysis/outputs/pr_impact_heatmap.png
             .code-analysis/outputs/development_flow.png
-            .code-analysis/outputs/story_arc.gif
+            .code-analysis/outputs/story_arc.png
             .code-analysis/outputs/comprehensive_pr_report.md
             .code-analysis/outputs/enhanced_image_report.md
             .code-analysis/outputs/documentation_suggestions.md

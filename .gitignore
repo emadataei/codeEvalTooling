@@ -81,8 +81,9 @@ Lib/
 Include/
 pyvenv.cfg
 
-# Code analysis outputs
-.code-analysis/outputs/
+# Code analysis outputs (keep directory, ignore generated files)
+.code-analysis/outputs/*
+!.code-analysis/outputs/.gitkeep
 
 # Generated analysis files (should be in outputs directory)
 cognitive_score.json

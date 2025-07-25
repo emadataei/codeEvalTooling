@@ -24,6 +24,8 @@ Use PowerShell syntax:
 - Multiple commands: `cmd1; cmd2; cmd3`
 - Remove files: `rm file1 file2 file3`
 - Install packages: `npm install pkg1 pkg2`
+- **Python venv**: Use `.\venv312\Scripts\Activate.ps1` (Python 3.12 with matplotlib, seaborn, pandas, numpy)
+- **Local visual testing**: Use `local-visual-test/` folder with `python scripts/generate_all_visuals.py`
 
 ## Key Files
 

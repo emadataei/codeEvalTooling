@@ -1,352 +1,419 @@
 #!/usr/bin/env python3
 """
-Generate Development Flow Visualization for Enhanced PR Visuals
-Creates a visual representation of the development workflow and code evolution
+Generate Optimized Development Flow Visualization
+Clean, focused visual showing PR development timeline
 """
 
 import json
 import os
 import sys
+import base64
 from pathlib import Path
 import subprocess
 from datetime import datetime
 
-# Try to import matplotlib, but don't fail if it's not available
 try:
     import matplotlib.pyplot as plt
     import matplotlib.patches as patches
-    import matplotlib.dates as mdates
     import numpy as np
     MATPLOTLIB_AVAILABLE = True
 except ImportError:
     MATPLOTLIB_AVAILABLE = False
 
 
-def run_git_command(command):
-    """Run a git command and return the output"""
-    try:
-        result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=30)
-        if result.returncode == 0:
-            return result.stdout.strip()
-        else:
-            print(f"Git command failed: {command}")
-            return None
-    except subprocess.TimeoutExpired:
-        print(f"Git command timed out: {command}")
-        return None
-    except Exception as e:
-        print(f"Error running git command: {e}")
-        return None
+def save_image_with_base64(fig, base_filename, title="Development Flow"):
+    """Save image as PNG and create base64 + markdown files"""
+    # Find the output directory dynamically
+    output_dir = None
+    for check_dir in ['.code-analysis/outputs', '../.code-analysis/outputs', '../../.code-analysis/outputs']:
+        if Path(check_dir).exists() or Path(check_dir).parent.exists():
+            output_dir = Path(check_dir)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            break
+    
+    if not output_dir:
+        output_dir = Path('.code-analysis/outputs')
+        output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Save PNG file
+    png_path = output_dir / f"{base_filename}.png"
+    fig.savefig(png_path, dpi=80, bbox_inches='tight', facecolor='white')
+    
+    # Get file size
+    size_kb = png_path.stat().st_size / 1024
+    
+    # Create base64 version
+    with open(png_path, "rb") as img_file:
+        img_data = img_file.read()
+        base64_data = base64.b64encode(img_data).decode('utf-8')
+        data_uri = f"data:image/png;base64,{base64_data}"
+    
+    # Save base64 text file
+    base64_path = output_dir / f"{base_filename}_base64.txt"
+    with open(base64_path, 'w') as f:
+        f.write(data_uri)
+    
+    # Create markdown embedding file
+    markdown_path = output_dir / f"{base_filename}_embed.md"
+    with open(markdown_path, 'w') as f:
+        f.write(f"![{title}]({data_uri})\n")
+    
+    print(f"Generated optimized {base_filename}: {size_kb:.1f} KB")
+    print(f"Base64 encoded: {len(base64_data):,} characters")
+    
+    return png_path, base64_path, markdown_path
 
 
-def get_commit_history():
-    """Get commit history for the current branch"""
-    # Get commits from the last 30 days or up to 20 commits, whichever is less
-    cmd = 'git log --oneline --date=short --pretty=format:"%h|%ad|%s|%an" --since="30 days ago" -20'
-    output = run_git_command(cmd)
+def classify_commit_purpose(message, files_changed=0):
+    """Classify commit purpose based on message and changes"""
+    message_lower = message.lower()
     
-    if not output:
-        return []
-    
-    commits = []
-    for line in output.split('\n'):
-        if '|' in line:
-            parts = line.split('|', 3)
-            if len(parts) >= 4:
-                commits.append({
-                    'hash': parts[0],
-                    'date': parts[1],
-                    'message': parts[2],
-                    'author': parts[3]
-                })
-    
-    return commits
-
-
-def categorize_commit(commit_message):
-    """Categorize commits by type based on message"""
-    message_lower = commit_message.lower()
-    
-    if any(keyword in message_lower for keyword in ['feat', 'feature', 'add']):
-        return 'Feature'
-    elif any(keyword in message_lower for keyword in ['fix', 'bug', 'hotfix']):
-        return 'Bugfix'
-    elif any(keyword in message_lower for keyword in ['refactor', 'refact', 'clean']):
-        return 'Refactor'
-    elif any(keyword in message_lower for keyword in ['test', 'spec']):
-        return 'Testing'
-    elif any(keyword in message_lower for keyword in ['doc', 'readme', 'comment']):
-        return 'Documentation'
-    elif any(keyword in message_lower for keyword in ['style', 'format', 'lint']):
-        return 'Style'
-    elif any(keyword in message_lower for keyword in ['config', 'setup', 'build']):
-        return 'Configuration'
-    else:
-        return 'Other'
-
-
-def get_file_changes_over_time():
-    """Get file changes over time"""
-    cmd = 'git log --oneline --name-status --since="30 days ago" -10'
-    output = run_git_command(cmd)
-    
-    if not output:
-        return {}
-    
-    changes_by_date = {}
-    current_date = None
-    
-    for line in output.split('\n'):
-        if line and not line.startswith(('A\t', 'M\t', 'D\t', 'R\t')):
-            # This is likely a commit line
-            continue
-        elif line.startswith(('A\t', 'M\t', 'D\t', 'R\t')):
-            # This is a file change line
-            change_type = line[0]
-            if current_date:
-                if current_date not in changes_by_date:
-                    changes_by_date[current_date] = {'added': 0, 'modified': 0, 'deleted': 0}
-                
-                if change_type == 'A':
-                    changes_by_date[current_date]['added'] += 1
-                elif change_type == 'M':
-                    changes_by_date[current_date]['modified'] += 1
-                elif change_type == 'D':
-                    changes_by_date[current_date]['deleted'] += 1
-    
-    return changes_by_date
-
-
-def generate_development_flow():
-    """Generate development flow visualization"""
-    if not MATPLOTLIB_AVAILABLE:
-        print("Matplotlib not available, creating placeholder")
-        create_placeholder_image()
-        return False
-    
-    print("Generating development flow visualization...")
-    
-    # Get commit data
-    commits = get_commit_history()
-    
-    if not commits:
-        print("No commit history available")
-        create_no_commits_image()
-        return False
-    
-    # Process commit data
-    commit_types = [categorize_commit(c['message']) for c in commits]
-    commit_type_counts = {}
-    for ct in commit_types:
-        commit_type_counts[ct] = commit_type_counts.get(ct, 0) + 1
-    
-    # Create visualization
-    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12))
-    
-    # 1. Development Flow Diagram
-    create_flow_diagram(ax1, commits)
-    
-    # 2. Commit Type Distribution
-    if commit_type_counts:
-        colors = plt.cm.Set3(np.linspace(0, 1, len(commit_type_counts)))
-        wedges, texts, autotexts = ax2.pie(commit_type_counts.values(), 
-                                          labels=commit_type_counts.keys(),
-                                          autopct='%1.1f%%', colors=colors, startangle=90)
-        ax2.set_title('Commit Type Distribution')
-        
-        for autotext in autotexts:
-            autotext.set_color('white')
-            autotext.set_fontweight('bold')
-    
-    # 3. Recent Commit Timeline
-    create_commit_timeline(ax3, commits)
-    
-    # 4. Development Activity Summary
-    create_activity_summary(ax4, commits, commit_type_counts)
-    
-    plt.suptitle(f'Development Flow Analysis ({len(commits)} recent commits)', 
-                fontsize=16, fontweight='bold')
-    plt.tight_layout()
-    plt.savefig('.code-analysis/outputs/development_flow.png', dpi=300, bbox_inches='tight',
-               facecolor='white', edgecolor='none')
-    plt.close()
-    
-    print(f"Development flow generated for {len(commits)} commits")
-    
-    # Save results
-    results = {
-        'total_commits': len(commits),
-        'commit_types': commit_type_counts,
-        'recent_commits': commits[:5],  # Top 5 most recent
-        'analysis_date': datetime.now().isoformat()
+    # Define purpose patterns (order matters - more specific first)
+    purpose_patterns = {
+        'setup': {
+            'keywords': ['initial', 'setup', 'init', 'scaffold', 'bootstrap', 'create project', 'dependencies', 'config'],
+            'color': '#9B59B6',
+            'icon': 'SET',
+            'label': 'Setup/Config'
+        },
+        'feature': {
+            'keywords': ['add', 'implement', 'create', 'new', 'feature', 'introduce', 'build'],
+            'color': '#3498DB', 
+            'icon': 'NEW',
+            'label': 'Features'
+        },
+        'fix': {
+            'keywords': ['fix', 'bug', 'error', 'issue', 'resolve', 'correct', 'patch'],
+            'color': '#E74C3C',
+            'icon': 'FIX', 
+            'label': 'Bug Fixes'
+        },
+        'refactor': {
+            'keywords': ['refactor', 'cleanup', 'reorganize', 'restructure', 'improve', 'optimize', 'clean'],
+            'color': '#F39C12',
+            'icon': 'REF',
+            'label': 'Refactoring'
+        },
+        'docs': {
+            'keywords': ['doc', 'readme', 'comment', 'documentation', 'guide', 'example'],
+            'color': '#2ECC71',
+            'icon': 'DOC',
+            'label': 'Documentation'
+        },
+        'test': {
+            'keywords': ['test', 'spec', 'unit', 'integration', 'coverage'],
+            'color': '#1ABC9C',
+            'icon': 'TST',  
+            'label': 'Testing'
+        },
+        'style': {
+            'keywords': ['style', 'format', 'lint', 'prettier', 'css', 'ui'],
+            'color': '#E67E22',
+            'icon': 'STY',
+            'label': 'Styling'
+        },
+        'merge': {
+            'keywords': ['merge', 'pull request', 'pr'],
+            'color': '#95A5A6',
+            'icon': 'MRG',
+            'label': 'Merges'
+        }
     }
     
-    with open('.code-analysis/outputs/development_flow_results.json', 'w') as f:
-        json.dump(results, f, indent=2)
+    # Check for purpose based on keywords
+    for purpose, config in purpose_patterns.items():
+        if any(keyword in message_lower for keyword in config['keywords']):
+            return purpose, config
+    
+    # Default to feature if no clear pattern
+    return 'feature', purpose_patterns['feature']
+
+
+def get_commit_timeline():
+    """Get commits with purpose classification and impact analysis"""
+    try:
+        # Get commits with detailed stats
+        cmd = ["git", "log", "--oneline", "--format=%h|%s|%ad", "--date=short", "--numstat", "-10"]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        
+        if result.returncode != 0:
+            return []
+        
+        commits = []
+        current_commit = None
+        
+        for line in result.stdout.strip().split('\n'):
+            if '|' in line and not line.startswith('\t'):
+                # This is a commit line
+                if current_commit:
+                    commits.append(current_commit)
+                
+                parts = line.split('|', 2)
+                if len(parts) >= 3:
+                    current_commit = {
+                        'hash': parts[0][:7],
+                        'message': parts[1][:50],
+                        'date': parts[2],
+                        'files_changed': 0,
+                        'lines_added': 0,
+                        'lines_deleted': 0
+                    }
+            elif current_commit and '\t' in line:
+                # This is a file change line
+                parts = line.split('\t')
+                if len(parts) >= 3:
+                    try:
+                        added = int(parts[0]) if parts[0] != '-' else 0
+                        deleted = int(parts[1]) if parts[1] != '-' else 0
+                        current_commit['files_changed'] += 1
+                        current_commit['lines_added'] += added
+                        current_commit['lines_deleted'] += deleted
+                    except ValueError:
+                        continue
+        
+        # Add the last commit
+        if current_commit:
+            commits.append(current_commit)
+        
+        # Classify each commit's purpose
+        for commit in commits:
+            purpose, purpose_config = classify_commit_purpose(commit['message'], commit['files_changed'])
+            commit['purpose'] = purpose
+            commit['purpose_config'] = purpose_config
+            
+            # Calculate impact
+            total_changes = commit['lines_added'] + commit['lines_deleted']
+            if total_changes > 100 or commit['files_changed'] > 5:
+                commit['impact'] = 'high'
+            elif total_changes > 30 or commit['files_changed'] > 2:
+                commit['impact'] = 'medium'
+            else:
+                commit['impact'] = 'low'
+        
+        return commits[:7]  # Show more commits for better purpose grouping
+        
+    except Exception as e:
+        print(f"Error getting commit timeline: {e}")
+        return []
+
+
+def generate_clean_flow():
+    """Generate purpose-focused development flow"""
+    if not MATPLOTLIB_AVAILABLE:
+        return create_placeholder()
+    
+    commits = get_commit_timeline()
+    if not commits:
+        return create_no_data_visual()
+    
+    # Create larger figure for purpose visualization
+    fig, (ax_timeline, ax_groups) = plt.subplots(2, 1, figsize=(16, 10), 
+                                                 gridspec_kw={'height_ratios': [2, 1]})
+    
+    # === TOP: PURPOSE-BASED TIMELINE ===
+    
+    # Calculate positions
+    num_commits = len(commits)
+    if num_commits == 1:
+        x_positions = [0.5]
+    else:
+        margin = 0.08
+        available_width = 1.0 - (2 * margin)
+        spacing = available_width / (num_commits - 1)
+        x_positions = [margin + i * spacing for i in range(num_commits)]
+    
+    # Draw timeline base
+    timeline_y = 0.5
+    if len(commits) > 1:
+        ax_timeline.plot(x_positions, [timeline_y] * len(commits), 
+                        color='#BDC3C7', linewidth=6, zorder=1, alpha=0.6)
+    
+    # Draw commits on timeline
+    for i, commit in enumerate(commits):
+        x_pos = x_positions[i]
+        config = commit['purpose_config']
+        
+        # Size based on impact
+        size_map = {'high': 180, 'medium': 140, 'low': 110}
+        size = size_map[commit['impact']]
+        
+        # Draw commit point
+        ax_timeline.scatter(x_pos, timeline_y, s=size, c=config['color'], 
+                           zorder=3, edgecolors='white', linewidth=3, alpha=0.9)
+        
+        # Add purpose icon and hash above
+        ax_timeline.text(x_pos, timeline_y + 0.25, f"[{config['icon']}] {commit['hash']}", 
+                        ha='center', va='bottom', fontsize=10, 
+                        fontweight='bold', color=config['color'])
+        
+        # Add impact metrics
+        total_changes = commit['lines_added'] + commit['lines_deleted']
+        metrics_text = f"{commit['files_changed']}f, {total_changes}Δ"
+        ax_timeline.text(x_pos, timeline_y - 0.15, metrics_text, 
+                        ha='center', va='top', fontsize=9, 
+                        color='#34495E', fontweight='bold')
+        
+        # Add commit message
+        message = commit['message'][:30] + '...' if len(commit['message']) > 30 else commit['message']
+        ax_timeline.text(x_pos, timeline_y - 0.25, message, 
+                        ha='center', va='top', fontsize=8, 
+                        color='#7F8C8D', style='italic',
+                        bbox={'boxstyle': 'round,pad=0.2', 'facecolor': 'white', 'alpha': 0.9, 'edgecolor': config['color'], 'linewidth': 1})
+        
+        # Add date
+        ax_timeline.text(x_pos, timeline_y - 0.35, commit['date'], 
+                        ha='center', va='top', fontsize=7, 
+                        color='#95A5A6')
+    
+    # Timeline styling
+    ax_timeline.set_xlim(0, 1)
+    ax_timeline.set_ylim(0, 1)
+    ax_timeline.set_title('Development Purpose Timeline', fontsize=18, pad=20, fontweight='bold', color='#2C3E50')
+    ax_timeline.axis('off')
+    
+    # === BOTTOM: PURPOSE GROUPS SUMMARY ===
+    
+    # Group commits by purpose
+    purpose_groups = {}
+    for commit in commits:
+        purpose = commit['purpose']
+        if purpose not in purpose_groups:
+            purpose_groups[purpose] = {
+                'commits': [],
+                'config': commit['purpose_config'],
+                'total_files': 0,
+                'total_changes': 0
+            }
+        purpose_groups[purpose]['commits'].append(commit)
+        purpose_groups[purpose]['total_files'] += commit['files_changed']
+        purpose_groups[purpose]['total_changes'] += commit['lines_added'] + commit['lines_deleted']
+    
+    # Draw purpose groups
+    group_positions = list(range(len(purpose_groups)))
+    group_x_positions = [i / max(1, len(purpose_groups) - 1) if len(purpose_groups) > 1 else 0.5 for i in group_positions]
+    
+    for i, (purpose, group_data) in enumerate(purpose_groups.items()):
+        x_pos = group_x_positions[i] if len(purpose_groups) > 1 else 0.5
+        config = group_data['config']
+        count = len(group_data['commits'])
+        
+        # Draw group circle (size based on commit count)
+        circle_size = 100 + (count * 30)
+        ax_groups.scatter(x_pos, 0.6, s=circle_size, c=config['color'], 
+                         zorder=3, edgecolors='white', linewidth=3, alpha=0.8)
+        
+        # Add purpose label and count
+        ax_groups.text(x_pos, 0.6, f"[{config['icon']}]\n{count}", 
+                      ha='center', va='center', fontsize=11, 
+                      fontweight='bold', color='white')
+        
+        # Add purpose name below
+        ax_groups.text(x_pos, 0.35, config['label'], 
+                      ha='center', va='top', fontsize=10, 
+                      fontweight='bold', color=config['color'])
+        
+        # Add metrics below
+        metrics = f"{group_data['total_files']}f, {group_data['total_changes']}Δ"
+        ax_groups.text(x_pos, 0.25, metrics, 
+                      ha='center', va='top', fontsize=8, 
+                      color='#34495E')
+    
+    # Groups styling
+    ax_groups.set_xlim(0, 1)
+    ax_groups.set_ylim(0, 1)
+    ax_groups.set_title('Purpose Groups Summary', fontsize=14, pad=15, fontweight='bold', color='#2C3E50')
+    ax_groups.axis('off')
+    
+    # Add overall summary
+    total_files = sum(c['files_changed'] for c in commits)
+    total_added = sum(c['lines_added'] for c in commits)
+    total_deleted = sum(c['lines_deleted'] for c in commits)
+    
+    summary_text = f"PR Development: {len(commits)} commits across {len(purpose_groups)} purposes • {total_files} files • +{total_added}/-{total_deleted} lines"
+    fig.suptitle(summary_text, fontsize=13, fontweight='bold', color='#2C3E50', y=0.02)
+    
+    plt.tight_layout()
+    plt.subplots_adjust(top=0.95, bottom=0.08)
+
+    # Save with base64 encoding for PR embedding
+    save_image_with_base64(fig, 'development_flow', 'Development Timeline')
+    plt.close()
     
     return True
 
 
-def create_flow_diagram(ax, commits):
-    """Create a simple flow diagram showing development stages"""
-    # Define flow stages
-    stages = ['Planning', 'Development', 'Testing', 'Review', 'Deploy']
-    stage_colors = ['#3498db', '#2ecc71', '#f39c12', '#e74c3c', '#9b59b6']
+def create_ultra_simple_flow(commits):
+    """Create minimal text-based flow if image is too large"""
+    fig, ax = plt.subplots(figsize=(8, 2))
     
-    # Create flow diagram
-    for i, (stage, color) in enumerate(zip(stages, stage_colors)):
-        # Draw stage box
-        rect = patches.Rectangle((i * 2, 1), 1.5, 1, linewidth=2, 
-                               edgecolor='black', facecolor=color, alpha=0.7)
-        ax.add_patch(rect)
-        
-        # Add stage label
-        ax.text(i * 2 + 0.75, 1.5, stage, ha='center', va='center', 
-               fontweight='bold', fontsize=10, color='white')
-        
-        # Add arrow to next stage
-        if i < len(stages) - 1:
-            ax.arrow(i * 2 + 1.5, 1.5, 0.4, 0, head_width=0.1, head_length=0.1, 
-                    fc='black', ec='black')
+    # Just show commit count and latest commit
+    latest = commits[0] if commits else {'message': 'No commits', 'hash': ''}
     
-    # Add commit information
-    commit_stage_mapping = {
-        'Feature': 1, 'Bugfix': 1, 'Refactor': 1,
-        'Testing': 2, 'Documentation': 3, 'Configuration': 0, 'Other': 1
-    }
+    ax.text(0.5, 0.7, f"{len(commits)} Recent Commits", 
+           ha='center', va='center', fontsize=16, fontweight='bold')
+    ax.text(0.5, 0.3, f"Latest: {latest['message']}", 
+           ha='center', va='center', fontsize=12)
     
-    # Count commits by stage
-    stage_counts = [0] * len(stages)
-    for commit in commits:
-        commit_type = categorize_commit(commit['message'])
-        stage_idx = commit_stage_mapping.get(commit_type, 1)
-        stage_counts[stage_idx] += 1
-    
-    # Add activity indicators
-    for i, count in enumerate(stage_counts):
-        if count > 0:
-            ax.text(i * 2 + 0.75, 0.5, f'{count} commits', ha='center', va='center', 
-                   fontsize=8, fontweight='bold')
-    
-    ax.set_xlim(-0.5, len(stages) * 2 - 0.5)
-    ax.set_ylim(0, 3)
-    ax.set_title('Development Flow Pipeline')
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
     ax.axis('off')
+    
+    plt.tight_layout()
+    
+    # Save with base64 encoding for PR embedding
+    save_image_with_base64(fig, 'development_flow', 'Development Timeline')
+    plt.close()
+    
+    return True
 
 
-def create_commit_timeline(ax, commits):
-    """Create a timeline of recent commits"""
-    if len(commits) < 2:
-        ax.text(0.5, 0.5, 'Insufficient commit history', ha='center', va='center', 
-               transform=ax.transAxes, fontsize=12)
-        ax.set_title('Recent Commit Timeline')
-        ax.axis('off')
-        return
+def create_no_data_visual():
+    """Create minimal visual when no commit data available"""
+    fig, ax = plt.subplots(figsize=(6, 2))
     
-    # Get commit dates and types
-    dates = [commit['date'] for commit in commits[:10]]  # Last 10 commits
-    types = [categorize_commit(commit['message']) for commit in commits[:10]]
-    
-    # Create color map for types
-    unique_types = list(set(types))
-    colors = plt.cm.tab10(np.linspace(0, 1, len(unique_types)))
-    type_colors = {t: colors[i] for i, t in enumerate(unique_types)}
-    
-    # Plot timeline
-    y_pos = range(len(dates))
-    commit_colors = [type_colors[t] for t in types]
-    
-    ax.scatter([0] * len(dates), y_pos, c=commit_colors, s=100, alpha=0.7)
-    
-    # Add commit messages (truncated)
-    for i, commit in enumerate(commits[:10]):
-        message = commit['message'][:40] + '...' if len(commit['message']) > 40 else commit['message']
-        ax.text(0.1, i, f"{commit['date']} - {message}", va='center', fontsize=8)
-    
-    ax.set_xlim(-0.1, 1)
-    ax.set_ylim(-0.5, len(dates) - 0.5)
-    ax.set_title('Recent Commit Timeline')
+    ax.text(0.5, 0.5, 'No Development Data Available', 
+           ha='center', va='center', fontsize=14)
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
     ax.axis('off')
-
-
-def create_activity_summary(ax, commits, commit_type_counts):
-    """Create activity summary"""
-    # Calculate activity metrics
-    total_commits = len(commits)
-    unique_authors = len(set(c['author'] for c in commits))
-    most_active_type = max(commit_type_counts.items(), key=lambda x: x[1]) if commit_type_counts else ('None', 0)
     
-    # Create summary text
-    summary_text = f"""Development Activity Summary
-
-Total Commits: {total_commits}
-Unique Authors: {unique_authors}
-Most Active Type: {most_active_type[0]} ({most_active_type[1]} commits)
-
-Recent Activity:
-• {commit_type_counts.get('Feature', 0)} new features
-• {commit_type_counts.get('Bugfix', 0)} bug fixes
-• {commit_type_counts.get('Refactor', 0)} refactors
-• {commit_type_counts.get('Testing', 0)} test updates
-"""
+    plt.tight_layout()
     
-    ax.text(0.05, 0.95, summary_text, transform=ax.transAxes, fontsize=10,
-           verticalalignment='top', fontfamily='monospace',
-           bbox=dict(boxstyle='round', facecolor='lightgray', alpha=0.8))
+    # Save with base64 encoding for PR embedding
+    save_image_with_base64(fig, 'development_flow', 'Development Timeline')
+    plt.close()
     
-    ax.set_title('Activity Summary')
-    ax.axis('off')
+    return True
 
 
-def create_placeholder_image():
-    """Create placeholder when matplotlib is not available"""
-    print("Created development flow placeholder (matplotlib not available)")
+def create_placeholder():
+    """Create text placeholder when matplotlib unavailable"""
+    output_file = '.code-analysis/outputs/development_flow_placeholder.md'
     
-    with open('.code-analysis/outputs/development_flow_placeholder.md', 'w') as f:
-        f.write("""# Development Flow Placeholder
-
-Matplotlib is not available for generating development flow visualizations.
-
-## To Enable Visual Flow Diagrams:
-```bash
-pip install matplotlib numpy
-```
-
-## Alternative Analysis:
-Use `git log --oneline --graph` to view commit history.
-""")
-
-
-def create_no_commits_image():
-    """Create image when no commits are found"""
-    if MATPLOTLIB_AVAILABLE:
-        fig, ax = plt.subplots(1, 1, figsize=(10, 6))
-        ax.text(0.5, 0.5, 'No Recent Commits Found', ha='center', va='center', 
-                fontsize=24, fontweight='bold', transform=ax.transAxes)
-        ax.text(0.5, 0.3, 'No commit history available for analysis', 
-                ha='center', va='center', fontsize=14, style='italic', transform=ax.transAxes)
-        ax.set_title('Development Flow', fontsize=18, fontweight='bold')
-        ax.axis('off')
-        
-        plt.tight_layout()
-        plt.savefig('.code-analysis/outputs/development_flow.png', dpi=300, bbox_inches='tight',
-                   facecolor='white', edgecolor='none')
-        plt.close()
+    with open(output_file, 'w') as f:
+        f.write("# Development Flow\n\n")
+        f.write("Visual flow generation requires matplotlib.\n\n")
+        f.write("Install with: `pip install matplotlib numpy`\n")
     
-    print("Created no-commits development flow image")
+    print("Created development flow placeholder")
+    return False
 
 
 def main():
-    """Main development flow generation logic"""
-    print("Starting development flow generation...")
+    """Main execution function"""
+    print("Generating optimized development flow...")
     
     # Ensure output directory exists
-    os.makedirs('.code-analysis/outputs', exist_ok=True)
+    Path('.code-analysis/outputs').mkdir(parents=True, exist_ok=True)
     
-    success = generate_development_flow()
-    
-    print("Development flow generation complete!")
-    return success
+    try:
+        success = generate_clean_flow()
+        if success:
+            print("Optimized development flow generation complete!")
+        return success
+    except Exception as e:
+        print(f"Error generating development flow: {e}")
+        return create_placeholder()
 
 
 if __name__ == "__main__":
