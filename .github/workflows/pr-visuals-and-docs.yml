@@ -202,13 +202,22 @@ jobs:
             .code-analysis/outputs/*.gif
           retention-days: 30
 
-      - name: Comment PR with enhanced visuals
+      - name: Cleanup old visual comments
         if: always() && github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const script = require('./.code-analysis/scripts/enhanced-visuals-pr-comment.js');
+            const script = require('./.code-analysis/scripts/cleanup-old-visual-comments.js');
+            return await script({ github, context });
+
+      - name: Comment PR with separate visual posts
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const script = require('./.code-analysis/scripts/separate-visuals-pr-comment.js');
             return await script({ github, context });
 
       - name: Comment PR with documentation suggestions
